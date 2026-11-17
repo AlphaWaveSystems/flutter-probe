@@ -13,6 +13,7 @@ const widgetFamilies = <String>[
   'textinput',
   'buttons',
   'navigation',
+  'display',
 ];
 
 /// The screen of [family], or null when there is none.
@@ -21,6 +22,7 @@ Widget? widgetFamilyScreen(String family) => switch (family) {
   'textinput' => const TextInputFamilyScreen(),
   'buttons' => const ButtonsFamilyScreen(),
   'navigation' => const NavigationFamilyScreen(),
+  'display' => const DisplayFamilyScreen(),
   _ => null,
 };
 
@@ -429,6 +431,66 @@ class _NavigationFamilyScreenState extends State<NavigationFamilyScreen> {
                 ),
               ),
               child: const Text('Open message'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Text and display, the text part (docs/compat/NEXT.md, item 1): a plain `Text`, a one-line `Text` that is cut with an ellipsis, a
+/// `Text.rich` of two spans ("Hello " and a bold "world") and a `RichText` of two spans ("Painted " and "rich text"). Nothing is tapped;
+/// the screen asks what `see` matches.
+class DisplayFamilyScreen extends StatelessWidget {
+  const DisplayFamilyScreen({super.key});
+
+  /// The text of the ellipsis line: chosen to be longer than a phone screen is wide, so it is painted cut (an inference from its length on
+  /// the two devices used; the agent does not report the painted width).
+  static const longLine =
+      'Shipping address: 1600 Amphitheatre Parkway, Mountain View, California, United States of America';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Display')),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          _s('wf_text', (k) => Text('Order total: 42.00', key: k)),
+          _s(
+            'wf_ellipsis',
+            (k) => Text(
+              longLine,
+              key: k,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          _s(
+            'wf_rich',
+            (k) => Text.rich(
+              key: k,
+              const TextSpan(
+                text: 'Hello ',
+                children: [
+                  TextSpan(
+                    text: 'world',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          _s(
+            'wf_richtext',
+            (k) => RichText(
+              key: k,
+              text: TextSpan(
+                style: DefaultTextStyle.of(context).style,
+                text: 'Painted ',
+                children: const [TextSpan(text: 'rich text')],
+              ),
             ),
           ),
         ],
