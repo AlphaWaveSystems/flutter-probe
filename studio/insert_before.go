@@ -182,6 +182,10 @@ func (a *App) CheckInsertBefore(file string, line int, openFile, content string)
 	a.mu.Lock()
 	ws := a.workspace
 	a.mu.Unlock()
+	if a.track.snapshot().Running {
+		// Also here, not only in the window's button: a run seen only as events (an automation-driven one) must stop an insertion in flight too.
+		return refuse("a run is in progress: wait until it has finished")
+	}
 	step, ok := a.failedTriageStep(ws, file, line)
 	switch {
 	case !ok:

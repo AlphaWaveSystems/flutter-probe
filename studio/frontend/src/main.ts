@@ -2152,6 +2152,8 @@ async function insertBeforeStep(t: { file: string; line: number }): Promise<void
   const checked = model.getValue();
   const pathAtClick = currentPath; // what was asked about: the file and the exact state of the editor's text
   const versionAtClick = model.getVersionId();
+  // The path and the version id identify the text because there is one editor model and it is never replaced (setValue, not setModel). If a second
+  // model is ever introduced, this check must compare the model itself too.
   let check: { ok: boolean; line?: number; text?: string; reason?: string };
   try {
     check = await CheckInsertBefore(t.file, t.line, currentPath, checked);
