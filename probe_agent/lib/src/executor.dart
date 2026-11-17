@@ -1283,11 +1283,11 @@ class ProbeExecutor {
   String? _stateCheckFailureReason(Element element, String check, String checkVal) {
     switch (check) {
       case 'enabled':
-        if (_isDisabled(element)) return 'is disabled';
-        return null;
       case 'disabled':
-        if (!_isDisabled(element)) return 'is enabled';
-        return null;
+        final disabled = _isDisabled(element);
+        if (disabled == null) _refuseUnreadControl(element, _enabledReadNames, check);
+        if (check == 'enabled') return disabled! ? 'is disabled' : null;
+        return disabled! ? null : 'is enabled';
       case 'contains':
         final text = _textOf(element);
         // An obscured field's text is never read, so nothing can be checked on it.
@@ -1307,6 +1307,7 @@ class ProbeExecutor {
         // passed for every widget, whatever its value.
         final checked = _checkedState(element);
         if (checked == null) {
+          _refuseUnreadControl(element, _checkedReadNames, check);
           return 'is not a checkable control (Switch, Checkbox, Radio, their ListTile variants, FilterChip or ChoiceChip)';
         }
         return checked ? null : 'is not checked';
@@ -2111,20 +2112,88 @@ class ProbeExecutor {
   /// selector matches is usually the `Text` inside a button, so the nearest enclosing
   /// control (button, icon button, FAB, text field, switch, checkbox) decides — a
   /// grey `ElevatedButton(onPressed: null, child: Text("Submit"))` is disabled.
-  bool _isDisabled(Element e) {
-    final own = _controlDisabled(e.widget);
-    if (own != null) return own;
+  ///
+  /// null when the nearest control is one whose state the agent cannot read: a widget named like a control it reads (an `ElevatedButton`)
+  /// that is not that class, as with `package:material_ui` (issue #852). Then nothing is decided: reading it as enabled was a false pass.
+  bool? _isDisabled(Element e) {
     bool? found;
-    var depth = 0;
-    e.visitAncestorElements((a) {
-      final d = _controlDisabled(a.widget);
+    var unread = false;
+    bool visit(Widget w) {
+      final d = _controlDisabled(w);
       if (d != null) {
         found = d;
         return false;
       }
-      return ++depth < 40;
-    });
-    return found ?? (e.widget is GestureDetector && (e.widget as GestureDetector).onTap == null);
+      if (_isLookalike(w, _enabledReadNames)) {
+        unread = true;
+        return false;
+      }
+      return true;
+    }
+
+    if (visit(e.widget)) {
+      var depth = 0;
+      e.visitAncestorElements((a) => visit(a.widget) && ++depth < 40);
+    }
+    if (found != null) return found;
+    if (unread) return null;
+    return e.widget is GestureDetector && (e.widget as GestureDetector).onTap == null;
+  }
+
+  /// The type name of [w] without its type arguments (`Radio<int>` is `Radio`).
+  static String _typeName(Widget w) => w.runtimeType.toString().split('<').first;
+
+  /// The controls whose enabled state the agent reads from their class (`_controlDisabled`), and whose checked state it reads
+  /// (`_checkedState`), each with the test for the framework's own class. A widget with one of these names that is not the framework's
+  /// class is another library's (issue #852: `package:material_ui`, `package:cupertino_ui`): a lookalike.
+  static final Map<String, bool Function(Widget)> _enabledReadNames = {
+    'ElevatedButton': (w) => w is ButtonStyleButton,
+    'FilledButton': (w) => w is ButtonStyleButton,
+    'OutlinedButton': (w) => w is ButtonStyleButton,
+    'TextButton': (w) => w is ButtonStyleButton,
+    'IconButton': (w) => w is IconButton,
+    'FloatingActionButton': (w) => w is FloatingActionButton,
+    'TextField': (w) => w is TextField,
+    'Switch': (w) => w is Switch,
+    'Checkbox': (w) => w is Checkbox,
+  };
+  static final Map<String, bool Function(Widget)> _checkedReadNames = {
+    'Checkbox': (w) => w is Checkbox,
+    'Switch': (w) => w is Switch,
+    'Radio': (w) => w is Radio,
+    'CheckboxListTile': (w) => w is CheckboxListTile,
+    'SwitchListTile': (w) => w is SwitchListTile,
+    'RadioListTile': (w) => w is RadioListTile,
+    'FilterChip': (w) => w is FilterChip,
+    'ChoiceChip': (w) => w is ChoiceChip,
+    'CupertinoSwitch': (w) => w is CupertinoSwitch,
+    'CupertinoRadio': (w) => w is CupertinoRadio,
+  };
+
+  /// Whether [w] has the name of a control in [names] but is not that framework class.
+  static bool _isLookalike(Widget w, Map<String, bool Function(Widget)> names) {
+    final isFramework = names[_typeName(w)];
+    return isFramework != null && !isFramework(w);
+  }
+
+  /// Throws when [e], or one of its ancestors within 40, is a lookalike of a control in [names] (its name, not its class): the
+  /// state check refuses instead of guessing (a negated check too: "cannot tell" is not "not in that state").
+  void _refuseUnreadControl(Element e, Map<String, bool Function(Widget)> names, String check) {
+    String? name = _isLookalike(e.widget, names) ? _typeName(e.widget) : null;
+    if (name == null) {
+      var depth = 0;
+      e.visitAncestorElements((a) {
+        if (_isLookalike(a.widget, names)) {
+          name = _typeName(a.widget);
+          return false;
+        }
+        return ++depth < 40;
+      });
+    }
+    if (name == null) return;
+    throw ProbeError(ProbeError.assertFailed,
+        '"is $check" cannot be evaluated: the target is a $name that is not the class the agent reads from package:flutter/material.dart or '
+        'cupertino.dart (a widget of package:material_ui or cupertino_ui is not recognised yet, issue #852), so the agent refuses rather than guess');
   }
 
   /// null when [w] is not a control this knows how to read.
