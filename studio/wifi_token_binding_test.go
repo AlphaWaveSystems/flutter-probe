@@ -239,13 +239,13 @@ func TestAPublicAddressIsRefusedBeforeTheQuestion(t *testing.T) {
 func TestTheSavedTokenQuestionShowsCleanText(t *testing.T) {
 	b := newBindApp(t, true)
 	real, spoof := newFakeAgent(t), newFakeAgent(t)
-	name := "Desk\nphone‮ " + strings.Repeat("x", 200)
+	name := "Desk\nphone\u202e " + strings.Repeat("x", 200)
 	b.savedAt(t, real, name)
 	out := b.connectSaved("127.0.0.1", spoof.port, name)
 	req := b.next(t, "confirm:request")[0].(ConfirmRequest)
 	b.a.AnswerConfirm(req.ID, false)
 	result(t, out)
-	if strings.ContainsAny(req.DeviceName, "\n‮") || len([]rune(req.DeviceName)) > maxConfirmTxt+1 || !strings.HasPrefix(req.DeviceName, "Desk phone") {
+	if strings.ContainsAny(req.DeviceName, "\n\u202e") || len([]rune(req.DeviceName)) > maxConfirmTxt+1 || !strings.HasPrefix(req.DeviceName, "Desk phone") {
 		t.Errorf("device name = %q", req.DeviceName)
 	}
 }

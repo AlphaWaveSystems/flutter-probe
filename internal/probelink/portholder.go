@@ -3,6 +3,7 @@ package probelink
 import (
 	"context"
 	"fmt"
+	"github.com/alphawavesystems/flutter-probe/internal/oneline"
 	"os/exec"
 	"regexp"
 	"runtime"
@@ -45,7 +46,8 @@ func parseLsofHolders(out string) string {
 		case strings.HasPrefix(line, "p"):
 			pid = line[1:]
 		case strings.HasPrefix(line, "c") && pid != "":
-			holders = append(holders, fmt.Sprintf("pid %s (%s)", pid, line[1:]))
+			// The command name is a process name of this machine, which any program can choose: printed as plain text.
+			holders = append(holders, fmt.Sprintf("pid %s (%s)", oneline.Clean(pid, 20), oneline.Clean(line[1:], 80)))
 			pid = ""
 		}
 	}
