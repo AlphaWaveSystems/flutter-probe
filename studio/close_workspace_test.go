@@ -87,3 +87,35 @@ func TestCloseWorkspaceIsRefusedWhileARunOrARecordingIsGoing(t *testing.T) {
 		t.Errorf("during a recording: %v, roots %v", err, b.automationRoots())
 	}
 }
+
+// The refusal and the change are one step under the run slot's lock and a.mu, and a run takes the slot and its workspace in one step under the same locks:
+// whichever comes first wins. Either the close happened first (the run is given the empty workspace), or the run took the slot first (the close is
+// refused and the workspace is open). The failing case is a close that succeeded while the run holds a workspace: a run that was given the slot with a
+// folder that was already closed. Run with -race.
+func TestCloseWorkspaceRacingARunNeverLeavesTheRunAClosedWorkspace(t *testing.T) {
+	t.Setenv("PROBE_STUDIO_WORKSPACE", "")
+	t.Setenv("PROBE_STUDIO_AUTOMATION_ROOTS", "")
+	dir := t.TempDir()
+	for i := 0; i < 2000; i++ {
+		a := NewApp()
+		a.SetWorkspace(dir)
+		done := make(chan error, 1)
+		start := make(chan struct{})
+		go func() { <-start; done <- a.CloseWorkspace() }()
+		close(start)
+		_, cancel, claimErr := a.claimRun()
+		closeErr := <-done
+		if claimErr != nil {
+			t.Fatalf("round %d: the claim failed on a fresh App: %v", i, claimErr)
+		}
+		switch {
+		case closeErr == nil && a.runWorkspace != "":
+			t.Fatalf("round %d: the workspace was closed, yet the run holds the slot with the workspace %q", i, a.runWorkspace)
+		case closeErr == errCloseDuringRun && len(a.automationRoots()) != 1:
+			t.Fatalf("round %d: a refused close changed the workspace", i)
+		case closeErr != nil && closeErr != errCloseDuringRun:
+			t.Fatalf("round %d: unexpected %v", i, closeErr)
+		}
+		a.releaseRun(cancel)
+	}
+}
