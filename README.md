@@ -947,8 +947,8 @@ visual:
   pixel_delta: 8
 
 tools:
-  adb: /path/to/adb          # optional override
-  flutter: /path/to/flutter  # optional override
+  adb: /path/to/adb          # optional override: an absolute path outside this repository
+  flutter: /path/to/flutter  # optional override: an absolute path outside this repository
 
 ai:
   api_key: sk-ant-...        # for probe generate and self-healing
