@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/text/unicode/norm"
 	"net"
 	"os"
 	"path/filepath"
@@ -386,10 +387,26 @@ func (a *App) CreateFile(path, content string) error {
 	if err != nil {
 		return err
 	}
+	name := filepath.Base(real)
+	if why := newFileNameProblem(name); why != "" {
+		return fmt.Errorf("%s: %s", name, why)
+	}
+	// A name the file system treats as an existing one although the bytes differ (APFS and NTFS ignore case, APFS ignores Unicode normalisation) is
+	// found by listing the folder and comparing the names folded and normalised; the exclusive create below is the check that cannot race.
+	if entries, err := os.ReadDir(filepath.Dir(real)); err == nil {
+		var names []string
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		if same := sameNameAmong(names, name); same != "" {
+			return fmt.Errorf("%s already exists: Save never replaces a file", same)
+		}
+	}
+	createFileAfterListing() // test seam: a file that appears here must still not be replaced
 	f, err := os.OpenFile(real, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		if os.IsExist(err) {
-			return fmt.Errorf("%s already exists: Save never replaces a file", filepath.Base(real))
+			return fmt.Errorf("%s already exists: Save never replaces a file", name)
 		}
 		return err
 	}
@@ -399,6 +416,62 @@ func (a *App) CreateFile(path, content string) error {
 		return err
 	}
 	return f.Close()
+}
+
+// createFileAfterListing is called between the listing and the exclusive create; tests put a file there.
+var createFileAfterListing = func() {}
+
+// sameNameAmong returns the entry that is the same name as name to a file system that ignores case and Unicode normalisation ("" when none is).
+func sameNameAmong(entries []string, name string) string {
+	want := foldedName(name)
+	for _, e := range entries {
+		if foldedName(e) == want {
+			return e
+		}
+	}
+	return ""
+}
+
+// foldedName is a file name as a file system that ignores case and Unicode normalisation sees it.
+func foldedName(s string) string {
+	return norm.NFC.String(strings.ToLower(norm.NFC.String(s)))
+}
+
+// windowsReserved are the names Windows refuses for a file, with or without an extension.
+var windowsReserved = map[string]bool{"CON": true, "PRN": true, "AUX": true, "NUL": true}
+
+// newFileNameProblem says why a name may not be given to a new file ("" when it may): a name that is not a plain .probe name, a name Windows cannot
+// hold (a reserved device name, a trailing dot or space), a control, hidden or direction character, or one over 255 bytes. The window checks the same
+// rules before it asks; they are here too because a script can call CreateFile.
+func newFileNameProblem(name string) string {
+	switch {
+	case name == "" || name == "." || name == "..":
+		return "not a file name"
+	case len(name) > 255:
+		return "the name is too long"
+	case !strings.HasSuffix(name, ".probe"):
+		return "only .probe files can be created"
+	case strings.HasPrefix(name, "."):
+		return "a file name cannot start with a dot"
+	}
+	stem := strings.TrimSuffix(name, ".probe")
+	switch {
+	case stem == "" || strings.HasSuffix(stem, ".") || strings.HasSuffix(stem, " "):
+		return "a file name cannot end with a dot or a space before .probe"
+	}
+	upper := strings.ToUpper(stem)
+	if i := strings.Index(upper, "."); i >= 0 {
+		upper = upper[:i] // CON.x.probe is CON to Windows
+	}
+	if windowsReserved[upper] || ((strings.HasPrefix(upper, "COM") || strings.HasPrefix(upper, "LPT")) && len(upper) == 4 && upper[3] >= '1' && upper[3] <= '9') {
+		return "a name Windows reserves for a device (CON, PRN, AUX, NUL, COM1 to COM9, LPT1 to LPT9) cannot be a file name"
+	}
+	for _, r := range name {
+		if strings.ContainsRune(`\/:*?"<>|`, r) || hiddenRune(r) || r < 0x20 {
+			return "a file name cannot have a slash, a colon, a wildcard, a quote or a hidden character"
+		}
+	}
+	return ""
 }
 
 // ---- Lint ----

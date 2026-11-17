@@ -108,21 +108,103 @@ func TestCreateFileRefusesALinkAFolderAndWhatIsNotAProbeFileOrOutsideTheWorkspac
 	}
 }
 
-// Case-insensitive file systems: a name that differs by case from an existing file is the same file there, and the exclusive create fails.
-func TestCreateFileRefusesTheSameNameInAnotherCaseWhereTheFileSystemIgnoresCase(t *testing.T) {
+// A name that differs only by case, or by Unicode normalisation, is the same name on a file system that ignores either (APFS, NTFS): it is refused by
+// comparing the listing, on every file system, and the exclusive create is the check that cannot race.
+func TestCreateFileRefusesTheSameNameInAnotherCaseOrNormalisation(t *testing.T) {
 	a, dir := createFixture(t)
-	upper := filepath.Join(dir, "LOGIN.probe")
-	if err := os.WriteFile(upper, []byte("keep"), 0o600); err != nil {
-		t.Fatal(err)
+	for existing, again := range map[string]string{
+		"LOGIN.probe":       "login.probe",
+		"e\u0301cran.probe": "\u00e9cran.probe",  // NFD on disk, NFC asked for
+		"\u00e9cole.probe":  "e\u0301cole.probe", // NFC on disk, NFD asked for
+		"\u00c9TE.probe":    "e\u0301te.probe",   // both at once
+	} {
+		p := filepath.Join(dir, existing)
+		if err := os.WriteFile(p, []byte("keep"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := a.CreateFile(filepath.Join(dir, again), "mine"); err == nil || !strings.Contains(err.Error(), "already exists") {
+			t.Errorf("%q over %q: %v, want already exists", again, existing, err)
+		}
+		if b, _ := os.ReadFile(p); string(b) != "keep" {
+			t.Errorf("%q was replaced: %q", existing, b)
+		}
 	}
-	lower := filepath.Join(dir, "login.probe")
-	if _, err := os.Stat(lower); err != nil {
-		t.Skip("this file system distinguishes case: the two names are two files")
+}
+
+func TestCreateFileRefusesNamesAFileSystemOrWindowsCannotHold(t *testing.T) {
+	a, dir := createFixture(t)
+	for _, bad := range []string{"CON.probe", "con.probe", "NUL.probe", "Aux.probe", "COM1.probe", "lpt9.probe", "CON.x.probe", "a..probe", "a .probe", "..probe", "a\u200bb.probe", "a\u202eb.probe", "a:b.probe", "a*b.probe", strings.Repeat("x", 251) + ".probe", "x.PROBE", "x.txt"} {
+		if err := a.CreateFile(filepath.Join(dir, bad), "x"); err == nil {
+			t.Errorf("%q was created", bad)
+		}
 	}
-	if err := a.CreateFile(lower, "mine"); err == nil || !strings.Contains(err.Error(), "already exists") {
-		t.Errorf("err = %v", err)
+	for _, good := range []string{"console.probe", "com10.probe", "lpt.probe", "a.b.probe", "ok name.probe", "\u00e9.probe"} {
+		if err := a.CreateFile(filepath.Join(dir, good), "x"); err != nil {
+			t.Errorf("%q refused: %v", good, err)
+		}
 	}
-	if b, _ := os.ReadFile(upper); string(b) != "keep" {
-		t.Errorf("replaced: %q", b)
+}
+
+// Many creates of one name at once: exactly one wins and the others say the file exists, and the winner's content is what is on disk.
+func TestCreateFileOnlyOneOfManyConcurrentCreatesWins(t *testing.T) {
+	a, dir := createFixture(t)
+	p := filepath.Join(dir, "race.probe")
+	const n = 40
+	errs := make(chan error, n)
+	start := make(chan struct{})
+	for i := 0; i < n; i++ {
+		go func(i int) {
+			<-start
+			errs <- a.CreateFile(p, strings.Repeat(string(rune('a'+i%26)), 50))
+		}(i)
+	}
+	close(start)
+	won := 0
+	for i := 0; i < n; i++ {
+		if err := <-errs; err == nil {
+			won++
+		} else if !strings.Contains(err.Error(), "already exists") {
+			t.Errorf("an unexpected refusal: %v", err)
+		}
+	}
+	if won != 1 {
+		t.Errorf("%d creates succeeded, want exactly one", won)
+	}
+	if b, _ := os.ReadFile(p); len(b) != 50 || strings.Trim(string(b), string(b[:1])) != "" {
+		t.Errorf("the file holds mixed content: %q", b)
+	}
+}
+
+// The listing check is tested as data, because a file system that ignores case or normalisation would refuse the create by itself and hide a missing check.
+func TestSameNameAmongFoldsCaseAndNormalisation(t *testing.T) {
+	for _, c := range []struct {
+		entries    []string
+		name, want string
+	}{
+		{[]string{"LOGIN.probe"}, "login.probe", "LOGIN.probe"},
+		{[]string{"e\u0301cran.probe"}, "\u00e9cran.probe", "e\u0301cran.probe"},
+		{[]string{"\u00e9cole.probe"}, "e\u0301cole.probe", "\u00e9cole.probe"},
+		{[]string{"\u00c9TE.probe"}, "e\u0301te.probe", "\u00c9TE.probe"},
+		{[]string{"other.probe"}, "login.probe", ""},
+		{nil, "login.probe", ""},
+	} {
+		if got := sameNameAmong(c.entries, c.name); got != c.want {
+			t.Errorf("%q among %q = %q, want %q", c.name, c.entries, got, c.want)
+		}
+	}
+}
+
+// The file appears between the listing and the exclusive create (the race the listing cannot see): it is not replaced.
+func TestCreateFileNeverReplacesAFileThatAppearsBetweenTheListingAndTheCreate(t *testing.T) {
+	a, dir := createFixture(t)
+	p := filepath.Join(dir, "late.probe")
+	createFileAfterListing = func() { _ = os.WriteFile(p, []byte("theirs"), 0o600) }
+	t.Cleanup(func() { createFileAfterListing = func() {} })
+	err := a.CreateFile(p, "mine")
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("err = %v", err)
+	}
+	if b, _ := os.ReadFile(p); string(b) != "theirs" {
+		t.Errorf("the file was replaced: %q", b)
 	}
 }

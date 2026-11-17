@@ -175,4 +175,37 @@ test.describe("Save as", () => {
       studio.stop();
     }
   });
+
+  test("sa-06 a second Save while the first is writing writes once: double Enter and a second click make one file", async ({ page }) => {
+    const studio = await startStudio();
+    try {
+      await page.context().setExtraHTTPHeaders({ "X-Headless-Token": studio.token });
+      let creates = 0;
+      await page.route("**/__headless/call", async (route) => {
+        if ((route.request().postData() ?? "").includes('"method":"CreateFile"')) {
+          creates++;
+          await new Promise((r) => setTimeout(r, 900)); // the write takes a while
+        }
+        await route.continue();
+      });
+      await page.goto(studio.url);
+      await typeScratch(page, 'test "x"');
+      await page.click("#btn-save");
+      await expect(overlay(page)).toBeVisible();
+      await nameField(page).fill("once");
+      await page.keyboard.press("Enter");
+      await page.keyboard.press("Enter"); // a second Enter while the first write is under way
+      await expect(overlay(page)).toBeHidden();
+      await expect(page.locator("#btn-save")).toBeDisabled({ timeout: 400 }); // Save is off while the file is written (the write takes 900 ms)
+      await page.keyboard.press(`${process.platform === "darwin" ? "Meta" : "Control"}+s`); // and its shortcut asks nothing
+      await page.waitForTimeout(300);
+      await expect(overlay(page)).toBeHidden();
+      await expect(page.locator("#editor-filename")).toContainText("once.probe");
+      await expect(page.locator("#editor-dirty")).toBeEmpty();
+      expect(creates).toBe(1);
+      expect(fs.readdirSync(studio.ws)).toEqual(["once.probe"]);
+    } finally {
+      studio.stop();
+    }
+  });
 });

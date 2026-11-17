@@ -256,6 +256,7 @@ let currentDir = "tests";
 // settings overlay and the chat line read the same file. currentDir moves when the file pane is browsed; this does not.
 let workspaceRoot = "";
 let dirty = false;
+let saving = false; // a new file is being written (Save as): no second Save may list the folder before the write has landed
 // First-run guidance: nothing is said while the workspace is still being opened at start-up, and the device list is not judged empty
 // before its first listing has arrived.
 let bootLoading = true;
@@ -270,7 +271,7 @@ let runInProgress = false;
 function setDirty(d: boolean) {
   dirty = d;
   $("editor-dirty").textContent = d ? "● unsaved" : "";
-  ($("btn-save") as HTMLButtonElement).disabled = !d || (!currentPath && !workspaceRoot); // a buffer with no file is saved as a new one in the workspace
+  ($("btn-save") as HTMLButtonElement).disabled = !d || saving || (!currentPath && !workspaceRoot); // a buffer with no file is saved as a new one in the workspace
   refreshRerun();
   refreshFirstRun();
 }
@@ -497,6 +498,21 @@ $("btn-close-workspace").addEventListener("click", () => void closeWorkspace());
 // saveAs gives an unsaved buffer (a recording, a scratch buffer) a file: the name is asked in the page, a file that exists is never replaced, and the new
 // file becomes the open one (so Run and Save work on it).
 async function saveAs(): Promise<void> {
+  if (saving) {
+    toast("Saving: wait until the file is written.", "info", 2500);
+    return;
+  }
+  saving = true;
+  setDirty(dirty); // disables Save while the name is asked and the file is written
+  try {
+    await saveAsInner();
+  } finally {
+    saving = false;
+    setDirty(dirty);
+  }
+}
+
+async function saveAsInner(): Promise<void> {
   if (!workspaceRoot) {
     toast("Open a workspace first: Save needs a folder to put the new file in.", "info", 4000);
     return;
