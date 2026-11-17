@@ -107,6 +107,10 @@ most 255 characters), and nothing is guessed. When two apps with the agent share
 (not a refusal) when the agent's `app_id` differs from `project.app` in `probe.yaml` (compared exactly on Android, where package names are case-sensitive, and without regard to case on iOS, where bundle ids are not), for example `the agent that answered reports app com.other.app, but project.app is
 com.example.app`. It is the app's own statement, not a proof, and an agent that does not send it (an older one) says nothing.
 
+**One visible text is one match.** A text selector matches a `Text`, a `Text.rich`, a `RichText` or a text field's value, by the whole text or any part
+of it. A `Text` builds a `RichText` inside it; the agent counts that pair once, so `see exactly 1 "<text>"` passes for one `Text`, an ordinal (`2nd "Row"`)
+counts separate texts, and a button's label is one match. Before the fix for issue #800 (`probe_agent` 0.27.0 and earlier), a plain `Text` counted twice: `see exactly 2` passed for one `Text`, and `2nd "8"` found the inner paragraph of a single "8"; with the fix both fail, and the real count and `tap "8"` are what to write.
+
 Errors use JSON-RPC codes: `-32000` timeout, `-32001` widget not found, `-32002` assertion failed. A timeout or
 not-found error lists the texts and keys visible at that moment, which is usually enough to see why a selector missed. The value of an obscured (password) field is never matched by a selector and never listed there; the field is found by its id, label or hint (see Password fields in the ProbeScript syntax page).
 
