@@ -73,3 +73,44 @@ func TestHidden(t *testing.T) {
 		}
 	}
 }
+
+// The joiners glue an emoji sequence or the letters of a word: Clean drops them instead of putting a space in their place, so a family
+// emoji, a heart with its emoji selector or a Persian word with a non-joiner does not fall apart into spaced pieces. The bidi controls and
+// the other hidden characters still become spaces.
+func TestCleanDropsJoiners(t *testing.T) {
+	for _, c := range []struct{ name, in, want string }{
+		{"family emoji (ZWJ)", cp(0x1F468, 0x200D, 0x1F469, 0x200D, 0x1F467), cp(0x1F468, 0x1F469, 0x1F467)},
+		{"heart with the emoji selector", "I " + cp(0x2764, 0xFE0F) + " it", "I " + cp(0x2764) + " it"},
+		{"Persian word with a non-joiner (ZWNJ)", cp(0x0645, 0x06CC, 0x200C, 0x062E, 0x0648, 0x0627, 0x0647, 0x0645), cp(0x0645, 0x06CC, 0x062E, 0x0648, 0x0627, 0x0647, 0x0645)},
+		{"an ideographic variation selector", cp(0x845B, 0xE0100) + "x", cp(0x845B) + "x"},
+		{"a bidi override still becomes a space", "a" + cp(0x200D, 0x202E) + "b", "a b"},
+		{"a zero-width space still becomes a space", "a" + cp(0x200B) + "b", "a b"},
+		{"a joiner between spaces adds nothing", "a " + cp(0x200D) + " b", "a b"},
+		{"a leading or trailing joiner is gone", cp(0x200D) + "abc" + cp(0xFE0F), "abc"},
+		{"only joiners is empty", cp(0x200C, 0x200D, 0xFE0F), ""},
+	} {
+		if got := Clean(c.in, 80); got != c.want {
+			t.Errorf("%s: Clean(%q) = %q, want %q", c.name, c.in, got, c.want)
+		}
+	}
+	// Dropped joiners do not use up the room.
+	if got := Clean(strings.Repeat(cp(0x200D), 50)+"visible", 10); got != "visible" {
+		t.Errorf("joiners counted against the limit: %q", got)
+	}
+}
+
+func TestJoiner(t *testing.T) {
+	for _, r := range []rune{0x200C, 0x200D, 0xFE00, 0xFE0F, 0xE0100, 0xE01EF} {
+		if !Joiner(r) {
+			t.Errorf("Joiner(%U) = false", r)
+		}
+		if !Hidden(r) {
+			t.Errorf("a joiner is still hidden: Hidden(%U) = false", r)
+		}
+	}
+	for _, r := range []rune{0x200B, 0x200E, 0x202E, 0x2060, 0x2066, 0xFEFF, 0xFDFF, 0xFE10, 0xE00FF, 0xE01F0, 'a', 0x1F468} {
+		if Joiner(r) {
+			t.Errorf("Joiner(%U) = true", r)
+		}
+	}
+}
