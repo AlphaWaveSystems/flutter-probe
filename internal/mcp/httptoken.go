@@ -2,10 +2,13 @@ package mcp
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/alphawavesystems/flutter-probe/internal/secretfile"
 )
@@ -13,8 +16,9 @@ import (
 // The bearer token of the HTTP transport.
 //
 // By default a new token (32 bytes from crypto/rand, hex) is made on every start and written to
-// <user config dir>/flutter-probe-mcp/http-token, mode 0600 in a 0700 directory. The file is
-// removed when the server stops. A token that changes on every start is the safer default: one
+// <user config dir>/flutter-probe-mcp/http-token-<address>-<port>, mode 0600 in a 0700 directory, one
+// file for each address and port a server listens on, so two servers of one user never overwrite each other's token. The
+// file is removed when the server stops. A token that changes on every start is the safer default: one
 // that leaked (a shell history, a screen share, a copied config) stops working with the process.
 // Someone who wants a token that stays the same supplies their own in PROBE_MCP_HTTP_TOKEN; then
 // nothing is written to disk.
@@ -27,7 +31,7 @@ const (
 	TokenEnv = "PROBE_MCP_HTTP_TOKEN"
 
 	tokenDirName  = "flutter-probe-mcp"
-	tokenFileName = "http-token"
+	tokenFileBase = "http-token"
 	tokenBytes    = 32
 	// minSuppliedToken is the shortest supplied token accepted: 32 bytes in base64 are 43 characters.
 	minSuppliedToken = 43
@@ -78,11 +82,40 @@ func checkSuppliedToken(token string) error {
 	return nil
 }
 
-// writeTokenFile writes the token to dir/http-token and returns the path, through the one writer of secret files (internal/secretfile): it refuses a
+// tokenFileName is the name of the token file of the server that listens on ip:port: http-token-<address>-<port>, with -z<hex of the zone>- before the
+// port for an IPv6 zone. An address and port belong to one server at a time, so the name does too: a server on another port, or on another address with
+// the same port (127.0.0.1 and ::1 can both be bound), has its own file, and a second one on the same address and port cannot start (the listen fails
+// before any file is touched). Different servers get different names, always: the address is its own text with each colon written as an underscore
+// (a colon is not allowed in a file name everywhere; ::1 is __1, and no address text has an underscore or a dash, so two addresses cannot give one text),
+// the zone (fe80::1%en0) is written as hexadecimal after -z (or, when it is longer than 32 characters, as a hash after -h), so no zone can look like part of an address, and the segments are told apart by the dashes.
+func tokenFileName(ip net.IP, zone string, port int) string {
+	addr := strings.ReplaceAll(ip.String(), ":", "_")
+	switch {
+	case zone == "":
+	case len(zone) <= maxZoneInName:
+		addr += "-z" + hex.EncodeToString([]byte(zone))
+	default: // a long zone keeps the name short: its hash stands for it, after a different marker so it cannot be read as a zone's own hex
+		sum := sha256.Sum256([]byte(zone))
+		addr += "-h" + hex.EncodeToString(sum[:16])
+	}
+	return fmt.Sprintf("%s-%s-%d", tokenFileBase, addr, port)
+}
+
+// boundForTokenFile is the address the token file name is made from: the bound one. A variable so a test can give it a zone (one cannot be bound
+// on every system) and see that RunHTTP's file name has it.
+var boundForTokenFile = func(a *net.TCPAddr) *net.TCPAddr { return a }
+
+// maxZoneInName is the longest zone written into a file name as it is (in hexadecimal, so twice as many characters); a longer one is hashed.
+const maxZoneInName = 32
+
+// tokenFileForAddr is the token file name of the server bound to addr (what RunHTTP uses): its address, its zone and its port.
+func tokenFileForAddr(addr *net.TCPAddr) string { return tokenFileName(addr.IP, addr.Zone, addr.Port) }
+
+// writeTokenFile writes the token to dir/name and returns the path, through the one writer of secret files (internal/secretfile): it refuses a
 // directory or an existing token file that is a link, not ours or reachable by other users, instead of repairing it. replaced reports that a token
 // file was already there: one left by a server that was killed, or the one a running server still depends on.
-func writeTokenFile(dir, token string) (path string, replaced bool, err error) {
-	return secretfile.Write(secretfile.Options{Label: "mcp http", Dir: dir, Name: tokenFileName, Content: token + "\n"})
+func writeTokenFile(dir, name, token string) (path string, replaced bool, err error) {
+	return secretfile.Write(secretfile.Options{Label: "mcp http", Dir: dir, Name: name, Content: token + "\n"})
 }
 
 // removeTokenFile removes the token file on shutdown, but only while it still holds this server's token: a second server started later has put its
