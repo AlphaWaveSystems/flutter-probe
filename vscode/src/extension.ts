@@ -40,7 +40,8 @@ function noticeStaleWorkspaceSettings(context: vscode.ExtensionContext): void {
   void context.workspaceState.update('flutterprobe.staleSettingsNoticed', true);
   void vscode.window.showWarningMessage(
     `FlutterProbe ignores ${stale.map(k => 'flutterprobe.' + k).join(', ')} in this workspace's .vscode/settings.json: ` +
-    'they can be set only in your user settings now, so a repository cannot set where secrets go. Move them to your user settings.',
+    'they can be set only in your user settings now: the secrets, and the relay URL and the cloud provider that decide where they are sent, ' +
+    'cannot come from a workspace. Which binary the extension runs is a separate setting (Tool Paths in the README). Move them to your user settings.',
   );
 }
 
