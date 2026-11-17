@@ -175,9 +175,7 @@ function onStep(s: RunStep): void {
     li.appendChild(name);
     li.appendChild(duration);
     li.setAttribute("aria-label", `step running: ${s.description}`);
-    li.addEventListener("click", () => {
-      if (s.line > 0) document.dispatchEvent(new CustomEvent("studio:goto-line", { detail: { file: s.file, line: s.line } }));
-    });
+    li.addEventListener("click", () => jumpToStep(s));
     listEl.appendChild(li);
     pendingRows.push(li);
     openSteps.set(key, li);
@@ -200,6 +198,7 @@ function onStep(s: RunStep): void {
       const errLi = document.createElement("li");
       errLi.classList.add("step-err");
       errLi.textContent = s.error;
+      errLi.addEventListener("click", () => jumpToStep(s, true)); // the error text is part of the row's click target
       li.insertAdjacentElement("afterend", errLi);
       pendingRows.push(errLi);
       anchor = errLi;
@@ -218,12 +217,19 @@ function onStep(s: RunStep): void {
       text.classList.add("triage-text");
       text.textContent = row.text;
       triLi.append(label, text);
+      triLi.addEventListener("click", () => jumpToStep(s, true));
       anchor.insertAdjacentElement("afterend", triLi);
       pendingRows.push(triLi);
       anchor = triLi;
     }
   }
   openSteps.delete(key);
+}
+
+/** Opens the line of a step (the same click as its row). Text a person has selected in an error or a hint to copy it is not a click on the row. */
+function jumpToStep(s: RunStep, ignoreSelection = false): void {
+  if (ignoreSelection && (window.getSelection()?.toString() ?? "") !== "") return;
+  if (s.line > 0) document.dispatchEvent(new CustomEvent("studio:goto-line", { detail: { file: s.file, line: s.line } }));
 }
 
 function appendResult(res: RunResult): void {
