@@ -3,7 +3,6 @@ package device
 import (
 	"context"
 	"errors"
-	"github.com/alphawavesystems/flutter-probe/internal/oneline"
 	"regexp"
 	"sort"
 	"strconv"
@@ -11,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/alphawavesystems/flutter-probe/internal/oneline"
 	"github.com/alphawavesystems/flutter-probe/internal/shellquote"
 )
 
