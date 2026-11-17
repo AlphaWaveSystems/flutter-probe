@@ -22,6 +22,10 @@ const (
 	PlatformIOS     Platform = "ios"
 )
 
+// AppIDIsCaseInsensitive reports whether two application ids that differ only in case name the same app on this platform: they do on iOS (a bundle id), and they do
+// not on Android (a package name is case-sensitive). probelink.AppIDMismatchWarning takes it as its ignoreCase argument.
+func (p Platform) AppIDIsCaseInsensitive() bool { return p == PlatformIOS }
+
 // Device represents a connected emulator or simulator.
 type Device struct {
 	ID        string   // ADB serial or iOS UDID

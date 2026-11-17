@@ -1,0 +1,70 @@
+# The negative variants of probe-tests/webview.probe: every test below asserts something WRONG, or crosses what the agent can do, and every one must FAIL.
+# They show that the positive suite can fail, and why. This file does not end in .probe, so `probe test` never picks it up in a directory run. To run it:
+#
+#   cp probe-tests/negative/webview.probe.expect-fail /tmp/webview-negative.probe
+#   probe test /tmp/webview-negative.probe --device <serial> -y      # (the app of the README is installed and started, the same probe.yaml as for webview.probe)
+#
+# Expected: 0 passed, 9 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+
+before each test
+  restart the app
+
+# Expected: see "Getting Stopped" in webview: No element in the WebView page "Fixture page" matches "Getting Stopped"
+test "N1 a title the page does not have"
+  wait until "Page loaded" appears
+  see "Getting Stopped" in webview
+
+# Expected: see "Echo: Total: 42.00   USD": Expected to see ... but it was not found (the stored text has its runs of spaces collapsed)
+test "N2 the stored total is collapsed, not the raw three spaces"
+  wait until "Page loaded" appears
+  store text of css:"#total" in webview as total
+  type "<total>" into #echo_input
+  see "Echo: Total: 42.00   USD"
+
+# Expected: see "Echo: a b c d": Expected to see ... but it was not found (the hidden characters are dropped, the stored text is "abc d")
+test "N3 the hidden characters are not kept"
+  wait until "Page loaded" appears
+  store text of css:"#hidden" in webview as hidden
+  type "<hidden>" into #echo_input
+  see "Echo: a b c d"
+
+# Expected: see "Message sent" in webview: No element in the WebView page "Fixture page" matches "Message sent" (the reload started the page again)
+test "N4 after the reload the message is gone"
+  wait until "Page loaded (1)" appears
+  tap "Contact support" in webview
+  wait until "Message sent" appears in webview
+  tap "Reload page"
+  wait until "Page loaded (2)" appears
+  see "Message sent" in webview
+
+# Expected: see css:"#nope" in webview: No element in the WebView page "Fixture page" matches "#nope"
+test "N5 an element that is not on the page"
+  wait until "Page loaded" appears
+  see css:"#nope" in webview
+
+# Expected: see "Reload page" in webview: No element in the WebView page "Fixture page" matches "Reload page" (a Flutter widget is not in the page)
+test "N6 a Flutter widget is not in the WebView"
+  wait until "Page loaded" appears
+  see "Reload page" in webview
+
+# Expected: see "Getting Started": Expected to see "text("Getting Started")" but it was not found (the page's text is not in the Flutter tree)
+test "N7 the page content is not in the Flutter tree"
+  wait until "Page loaded" appears
+  see "Getting Started"
+
+# Expected: see "Echo: helo": Expected to see ... but it was not found (the typed value read back is "hello")
+test "N8 the typed value is read back, so a wrong expectation fails"
+  wait until "Page loaded" appears
+  type "hello" into css:"#message" in webview
+  store text of css:"#message" in webview as typed
+  type "<typed>" into #echo_input
+  see "Echo: helo"
+
+# Expected: see "Echo: Message sent!": Expected to see ... but it was not found (the result text read from the page is "Message sent")
+test "N9 the result text is the text the page shows"
+  wait until "Page loaded" appears
+  tap "Contact support" in webview
+  wait until "Message sent" appears in webview
+  store text of css:"#result" in webview as result
+  type "<result>" into #echo_input
+  see "Echo: Message sent!"

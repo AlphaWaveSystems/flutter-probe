@@ -3,7 +3,7 @@ title: Probe Cloud design-partner guide
 description: What a Probe Cloud design partner installs, what to expect while the hosted service is in preview, and how to send feedback.
 ---
 
-This page is for the first teams trying Probe Cloud, the hosted report service that is in preview. If you have not applied yet, see [pricing](/pricing/#design-partners). Everything on this page is free to follow: the CLI and agent do not need Probe Cloud.
+This page is for the first teams trying Probe Cloud, the hosted report service that is in preview. If you have not applied yet: [apply on GitHub](https://github.com/AlphaWaveSystems/flutter-probe/issues/new?template=design-partner.yml) with the design partner form (the issue is public), or [apply by email](mailto:support@alphawavesystems.com?subject=Probe%20Cloud%20design%20partner) to support@alphawavesystems.com. The offer is on the [pricing page](/pricing/#design-partners). Everything on this page is free to follow: the CLI and agent do not need Probe Cloud.
 
 > **Status.** The hosted service is not live yet. Today you can install everything, run your tests, and inspect exactly what an upload would send with `--upload-dry-run`. When the service goes live, design partners get access first. The beta may change or end, and plan details are not final.
 
