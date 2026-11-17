@@ -29,6 +29,7 @@ import { toast } from "./toast";
 import {
   CancelRun,
   CheckReplaceLine,
+  CloseWorkspace,
   SelectorFixAttempts,
   Chat,
   Connect,
@@ -437,6 +438,7 @@ async function pickWorkspace() {
     await SetWorkspace(path);
     resetAIPreview();
     workspaceRoot = path;
+    showWorkspaceClose();
     resetNetworkPanel();
     refreshFiles(path);
     void refreshWorkspaceNote();
@@ -447,6 +449,45 @@ async function pickWorkspace() {
 }
 
 $("btn-pick-workspace").addEventListener("click", pickWorkspace);
+
+// The Close button is there only while a workspace is open. Closing brings back the state of a first start (no workspace, no file, the guidance in
+// the panes), and forgets the remembered folder, so the next start does not reopen it. PROBE_STUDIO_WORKSPACE, when set, still opens its folder at start.
+function showWorkspaceClose(): void {
+  ($("btn-close-workspace") as HTMLButtonElement).hidden = workspaceRoot === "";
+}
+
+async function closeWorkspace(): Promise<void> {
+  if (workspaceRoot === "") return;
+  if (dirty && !(await askDiscard())) return; // unsaved changes: the same question as opening another file
+  try {
+    await CloseWorkspace(); // Go refuses while a run or a recording is going (and says so)
+  } catch (err) {
+    toast(String(err).replace(/^Error:\s*/, ""), "info", 4000);
+    return;
+  }
+  localStorage.removeItem(WORKSPACE_KEY);
+  workspaceRoot = "";
+  resetAIPreview();
+  resetNetworkPanel();
+  model.setValue("");
+  currentPath = null;
+  $("editor-filename").textContent = "untitled.probe";
+  setDirty(false);
+  updateRunButton();
+  showWorkspaceClose();
+  void refreshWorkspaceNote();
+  // The tree is cleared here, not listed again: with a folder from the environment still reachable, a listing of a relative path would be refused and say so.
+  currentDir = "tests";
+  $("file-path").textContent = currentDir;
+  const list = $("file-list");
+  clearChildren(list);
+  listing = "empty";
+  renderEmptyPane(list);
+  refreshFirstRun();
+  toast("Workspace closed", "info", 1800);
+}
+
+$("btn-close-workspace").addEventListener("click", () => void closeWorkspace());
 
 // ---- Save ---------------------------------------------------------------
 
@@ -2210,6 +2251,7 @@ initDeviceSettings();
     await SetWorkspace(ws);
     resetAIPreview();
     workspaceRoot = ws;
+    showWorkspaceClose();
     resetNetworkPanel();
     void refreshWorkspaceNote();
     await refreshFiles(ws);

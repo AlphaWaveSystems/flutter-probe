@@ -199,6 +199,28 @@ func (a *App) SetWorkspace(path string) {
 	a.resetFixAttempts() // another workspace is another session of suggestions
 }
 
+var (
+	errCloseDuringRun       = fmt.Errorf("a run is in progress: cancel it before closing the workspace")
+	errCloseDuringRecording = fmt.Errorf("a recording is in progress: stop it before closing the workspace")
+)
+
+// CloseWorkspace closes the workspace a person opened (the window's Close button): it is SetWorkspace with no folder, refused while a run or a
+// recording is going. The check is here and not only in the page, so a script with the bridge token cannot pull the workspace from under a run either.
+// A connection that exists is not dropped, and keeps the probe.yaml configuration it was made with.
+func (a *App) CloseWorkspace() error {
+	if a.runActive() {
+		return errCloseDuringRun
+	}
+	a.mu.Lock()
+	recording := a.recActive
+	a.mu.Unlock()
+	if recording {
+		return errCloseDuringRecording
+	}
+	a.SetWorkspace("")
+	return nil
+}
+
 // useWorkspace switches the open workspace on behalf of the automation endpoint. Unlike
 // SetWorkspace it does not widen what automation may touch.
 func (a *App) useWorkspace(path string) {
