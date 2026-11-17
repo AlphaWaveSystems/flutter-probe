@@ -446,23 +446,30 @@ func TestHexKeysDoNotMerge(t *testing.T) {
 	}
 }
 
-// A listing costs what its newest 500 rows cost, not what the whole log costs: the cut is made before any row is redacted.
+// A listing costs what its newest 500 rows cost, not what the whole log costs: the cut is made before any row is redacted. This is counted, not timed:
+// the number of entries that are redacted is what the cost is made of, and it does not depend on how busy the machine is.
 func TestListingCutsBeforeItRedacts(t *testing.T) {
-	big := strings.Repeat("ab=cd; ", 2400) // about 16 KB
+	big := strings.Repeat("ab=cd; ", 20) // 140 bytes: the count does not depend on the size, and redacting a row costs far more under -race than it does here
 	var entries []probelink.HTTPEntry
-	for i := 1; i <= 4000; i++ {
+	for i := 1; i <= 1000; i++ {
 		entries = append(entries, probelink.HTTPEntry{Seq: i, Method: "GET", URL: "https://h.example.test/p?" + big, Error: big, Status: 200})
 	}
-	a := netApp(&fakeNetClient{res: probelink.HTTPLogResult{Epoch: "e", Latest: 4000, Entries: entries}})
+	a := netApp(&fakeNetClient{res: probelink.HTTPLogResult{Epoch: "e", Latest: 1000, Entries: entries}})
+	redacted := 0
+	netRowRedacted = func() { redacted++ }
+	defer func() { netRowRedacted = nil }()
 	start := time.Now()
 	l, err := a.HTTPExchanges(NetFilter{})
 	took := time.Since(start)
-	if err != nil || l.Total != 4000 || l.Shown != netMaxRows || l.Rows[0].Seq != 3501 || l.Rows[netMaxRows-1].Seq != 4000 {
+	if err != nil || l.Total != 1000 || l.Shown != netMaxRows || l.Rows[0].Seq != 501 || l.Rows[netMaxRows-1].Seq != 1000 {
 		t.Fatalf("total %d shown %d: %v", l.Total, l.Shown, err)
 	}
-	t.Logf("a listing of 4,000 entries of 16 KB: %v", took)
-	if !raceEnabled && took > 3*time.Second {
-		t.Errorf("the listing took %v: the log is redacted before the cut", took)
+	t.Logf("a listing of 1,000 entries of 140 bytes: %v, %d redacted", took, redacted)
+	if redacted != netMaxRows {
+		t.Errorf("%d entries were redacted for a listing of %d rows: the log is redacted before the cut", redacted, netMaxRows)
+	}
+	if took > 120*time.Second { // a backstop for a hang, not a measure of speed
+		t.Errorf("the listing took %v", took)
 	}
 	// With a filter the newest rows are read first and the scan has a limit.
 	var many []probelink.HTTPEntry
