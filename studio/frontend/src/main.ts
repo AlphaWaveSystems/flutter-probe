@@ -554,6 +554,9 @@ async function openSettingsOverlay() {
     ($("settings-retry") as HTMLInputElement).value = s.retryFailedTests ? String(s.retryFailedTests) : "";
     ($("settings-implicit-wait") as HTMLInputElement).value = s.implicitWait ?? "";
     ($("settings-ios") as HTMLInputElement).value = s.iosDeviceId ?? "";
+    const iosProblem = $("settings-ios-problem");
+    iosProblem.textContent = s.iosDeviceIdProblem ?? ""; // text, never markup: it quotes the value from probe.yaml
+    iosProblem.hidden = !s.iosDeviceIdProblem;
     ($("settings-android") as HTMLInputElement).value = s.androidDeviceId ?? "";
     ($("settings-ai-run-results") as HTMLInputElement).checked = s.aiContextRunResults === true;
     ($("settings-ai-widget-tree") as HTMLInputElement).checked = s.aiContextWidgetTree === true;
@@ -1411,7 +1414,7 @@ async function selectWiFiDevice(dev: WiFiDevice) {
   if (wifiSelected !== dev) return;
   $("wifi-selected-label").textContent =
     `Connecting to ${dev.name} (${dev.host}:${dev.port})` +
-    (saved ? " · a saved token is used if the field is blank" : "");
+    (saved ? " · a saved token is used if the field is blank (you are asked first if this address is not the one it was saved for)" : "");
   input.focus();
 }
 

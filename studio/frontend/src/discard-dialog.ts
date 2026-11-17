@@ -1,18 +1,19 @@
 // The question before unsaved changes are thrown away (opening another file while the editor has changes). It is in the page, not the browser's
 // confirm(): the window's webview does not show a native confirm, which answered no and left the click doing nothing. The safe defaults are the
 // clear-data question's: "Keep editing" has the focus, Escape says no, Enter on the discard button does nothing (a click, or Space, says yes), and a
-// click on the dark area around the card is not an answer.
+// click on the dark area around the card is not an answer. The discard button is armed after half a second, as in the clear-data question.
 
-import { keyAction } from "./confirm-copy";
+import { CONFIRM_ARM_MS, keyAction } from "./confirm-copy";
 
 const $ = (id: string) => document.getElementById(id) as HTMLElement;
 
-let open: { resolve: (discard: boolean) => void; opener: Element | null } | null = null;
+let open: { resolve: (discard: boolean) => void; opener: Element | null; armTimer: number } | null = null;
 
 function close(discard: boolean): void {
   if (!open) return;
-  const { resolve, opener } = open;
+  const { resolve, opener, armTimer } = open;
   open = null;
+  window.clearTimeout(armTimer);
   document.removeEventListener("keydown", trapKey, true);
   document.removeEventListener("focusin", keepFocus, true);
   $("discard-overlay").hidden = true;
@@ -50,7 +51,9 @@ function keepFocus(ev: FocusEvent): void {
 export function askDiscard(): Promise<boolean> {
   if (open) return Promise.resolve(false); // one question at a time: a second one is a no
   return new Promise<boolean>((resolve) => {
-    open = { resolve, opener: document.activeElement };
+    const danger = $("btn-discard-ok") as HTMLButtonElement;
+    danger.disabled = true; // armed after CONFIRM_ARM_MS, like the clear-data question: a click that was meant for the page under it cannot discard
+    open = { resolve, opener: document.activeElement, armTimer: window.setTimeout(() => { danger.disabled = false; }, CONFIRM_ARM_MS) };
     $("discard-overlay").hidden = false;
     document.addEventListener("keydown", trapKey, true);
     document.addEventListener("focusin", keepFocus, true);

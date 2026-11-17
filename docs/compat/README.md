@@ -8,6 +8,8 @@ rendering or accessibility, and either break the agent or leave new components u
 | `catalog.json` | Every public widget of Flutter's `widgets`, `material` and `cupertino` libraries, stamped with the Flutter and Dart versions it was made from | generated, never edited by hand |
 | `MATRIX.md` | For each widget family, how FlutterProbe finds, taps, types into, scrolls and reads it, and whether a fixture screen and a real-device test cover it | by hand, only from tests that ran |
 | `RELEASES.md` | A log of each stable Flutter and Dart release: what affects FlutterProbe, the catalog changes, what was done | by hand |
+| `NEXT.md` | A plan: the widgets apps use most that the matrix has not assessed, ranked by how many sample apps use them, with the test to write for each | by hand; it changes no matrix cell |
+| `widget-usage.py` | The count behind `NEXT.md`: for each catalog widget, how many packages of a source tree construct it | a script; run it on a checkout of the source |
 
 ## The rules
 
