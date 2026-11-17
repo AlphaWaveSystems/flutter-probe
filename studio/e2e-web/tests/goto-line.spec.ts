@@ -126,6 +126,7 @@ test.describe("Open the failing line", () => {
     await stepRow(page, 'tap "q"').click();
     await expect(page.locator("#discard-overlay")).toBeVisible();
     await expect(page.locator("#btn-discard-cancel")).toBeFocused();
+    await expect(page.locator("#btn-discard-ok")).toBeEnabled(); // armed after half a second: a disabled button cannot take the focus
     await page.keyboard.press("Tab");
     await expect(page.locator("#btn-discard-ok")).toBeFocused();
     await page.keyboard.press("Enter"); // Enter on Discard changes does nothing
