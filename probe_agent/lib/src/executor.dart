@@ -2137,7 +2137,27 @@ class ProbeExecutor {
     }
     if (found != null) return found;
     if (unread) return null;
+    // A keyed wrapper around a lookalike (`SizedBox(key: #w, child: <material_ui button>)`): nothing above or on the target was read, and
+    // the control is below it. Refuse rather than fall back to the old rule (enabled).
+    if (_lookalikeBelow(e, _enabledReadNames) != null) return null;
     return e.widget is GestureDetector && (e.widget as GestureDetector).onTap == null;
+  }
+
+  /// The type name of the first lookalike of [names] below [e] (in its subtree), or null. A control the agent reads that comes first on a
+  /// branch ends that branch: the lookalike must be what the target holds, not something deeper inside a control that is read.
+  String? _lookalikeBelow(Element e, Map<String, bool Function(Widget)> names) {
+    String? found;
+    void visit(Element c) {
+      if (found != null) return;
+      if (_isLookalike(c.widget, names)) {
+        found = _typeName(c.widget);
+        return;
+      }
+      if (names[_typeName(c.widget)] != null) return; // the framework's own control: read, not a lookalike
+      c.visitChildren(visit);
+    }
+    e.visitChildren(visit);
+    return found;
   }
 
   /// The type name of [w] without its type arguments (`Radio<int>` is `Radio`).
@@ -2179,7 +2199,14 @@ class ProbeExecutor {
   /// Throws when [e], or one of its ancestors within 40, is a lookalike of a control in [names] (its name, not its class): the
   /// state check refuses instead of guessing (a negated check too: "cannot tell" is not "not in that state").
   void _refuseUnreadControl(Element e, Map<String, bool Function(Widget)> names, String check) {
+    // The same places the readers look: the target, then what it holds, then what holds it (up to 40).
+    String? where;
     String? name = _isLookalike(e.widget, names) ? _typeName(e.widget) : null;
+    if (name != null) where = 'is';
+    if (name == null) {
+      name = _lookalikeBelow(e, names);
+      if (name != null) where = 'holds';
+    }
     if (name == null) {
       var depth = 0;
       e.visitAncestorElements((a) {
@@ -2189,11 +2216,14 @@ class ProbeExecutor {
         }
         return ++depth < 40;
       });
+      if (name != null) where = 'is inside';
     }
     if (name == null) return;
+    final article = RegExp(r'^[AEIOU]').hasMatch(name!) ? 'an' : 'a';
     throw ProbeError(ProbeError.assertFailed,
-        '"is $check" cannot be evaluated: the target is a $name that is not the class the agent reads from package:flutter/material.dart or '
-        'cupertino.dart (a widget of package:material_ui or cupertino_ui is not recognised yet, issue #852), so the agent refuses rather than guess');
+        '"is $check" cannot be evaluated: the target $where $article $name that is not the class of package:flutter/material.dart or '
+        'cupertino.dart the agent reads; a control of package:material_ui or cupertino_ui is not recognised yet (issue #852). '
+        'Assert on its text or content instead, or see "Apps on material_ui or cupertino_ui" at https://flutterprobe.dev/tools/agent/');
   }
 
   /// null when [w] is not a control this knows how to read.

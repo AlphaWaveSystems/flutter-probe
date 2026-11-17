@@ -46,6 +46,27 @@ class Radio<T> extends StatelessWidget {
   Widget build(BuildContext context) => Text('$value');
 }
 
+// A lookalike that builds its child directly, so the number of elements between it and the target is exact (the 40-ancestor bound).
+class FilledButton extends StatelessWidget {
+  const FilledButton({super.key, required this.onPressed, required this.child});
+  final VoidCallback? onPressed;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => child;
+}
+
+// A pass-through lookalike for the checked bound.
+class CheckboxListTile extends StatelessWidget {
+  const CheckboxListTile({super.key, required this.child});
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => child;
+}
+
+Widget _nest(int n, Widget child) => n == 0
+    ? child
+    : Padding(padding: EdgeInsets.zero, child: _nest(n - 1, child));
+
 // An app's own control with its own name: not the framework's name, so the agent's old rule applies.
 class LoginButton extends StatelessWidget {
   const LoginButton({super.key});
@@ -97,7 +118,7 @@ void main() {
           onPressed: null, child: Text('Submit', key: ValueKey('label')))
     ]);
     expect(await _see('label', 'enabled'),
-        contains('the target is a ElevatedButton'));
+        contains('the target is inside an ElevatedButton'));
   });
 
   testWidgets(
@@ -143,5 +164,95 @@ void main() {
       (tester) async {
     await _pump(tester, [const LoginButton(key: ValueKey('login'))]);
     expect(await _see('login', 'enabled'), isNull);
+  });
+
+  testWidgets(
+      'a keyed wrapper around a lookalike refuses too, positive and negated (the readers look below the target)',
+      (tester) async {
+    await _pump(tester, [
+      SizedBox(
+          key: const ValueKey('w_cb'),
+          child: Checkbox(value: true, onChanged: (_) {})),
+      const SizedBox(
+          key: ValueKey('w_btn'),
+          child: ElevatedButton(onPressed: null, child: Text('Off'))),
+    ]);
+    expect(
+        await _see('w_cb', 'checked'), contains('the target holds a Checkbox'));
+    expect(await _see('w_cb', 'checked', negated: true),
+        contains('cannot be evaluated'),
+        reason: "don't see #w is checked must not pass");
+    for (final check in ['enabled', 'disabled']) {
+      expect(await _see('w_btn', check),
+          contains('the target holds an ElevatedButton'),
+          reason: check);
+      expect(await _see('w_btn', check, negated: true),
+          contains('cannot be evaluated'),
+          reason: 'negated $check');
+    }
+  });
+
+  testWidgets('the message says what to do instead', (tester) async {
+    await _pump(tester, [
+      const ElevatedButton(
+          key: ValueKey('off'), onPressed: null, child: Text('Off'))
+    ]);
+    final message = await _see('off', 'enabled');
+    expect(message, contains('the target is an ElevatedButton'));
+    expect(message, contains('Assert on its text or content instead'));
+    expect(message, contains('https://flutterprobe.dev/tools/agent/'));
+  });
+
+  testWidgets(
+      'the ancestor bound: a lookalike 40 ancestors up refuses, 41 up does not (the old rule)',
+      (tester) async {
+    // The target Text is the element; its ancestors are the Paddings, then the lookalike: 39 Paddings put it at ancestor 40.
+    await _pump(tester, [
+      FilledButton(
+          onPressed: null,
+          child: _nest(39, const Text('Near', key: ValueKey('near'))))
+    ]);
+    expect(await _see('near', 'enabled'),
+        contains('the target is inside a FilledButton'));
+    await _pump(tester, [
+      FilledButton(
+          onPressed: null,
+          child: _nest(40, const Text('Far', key: ValueKey('far'))))
+    ]);
+    expect(await _see('far', 'enabled'), isNull,
+        reason:
+            'past the bound nothing is found and the old rule (enabled) applies');
+  });
+
+  testWidgets(
+      'the checked bound: a lookalike 40 ancestors up refuses, 41 up gives the old answer',
+      (tester) async {
+    await _pump(tester, [
+      CheckboxListTile(
+          child: _nest(39, const Text('Near', key: ValueKey('cnear'))))
+    ]);
+    expect(await _see('cnear', 'checked'),
+        contains('the target is inside a CheckboxListTile'));
+    await _pump(tester, [
+      CheckboxListTile(
+          child: _nest(40, const Text('Far', key: ValueKey('cfar'))))
+    ]);
+    expect(
+        await _see('cfar', 'checked'), contains('is not a checkable control'));
+  });
+
+  testWidgets(
+      'a wrapper around a framework button keeps the old rule, whatever the button holds',
+      (tester) async {
+    await _pump(tester, [
+      SizedBox(
+        key: const ValueKey('w_fm'),
+        child: m.ElevatedButton(
+            onPressed: () {}, child: Checkbox(value: false, onChanged: (_) {})),
+      ),
+    ]);
+    expect(await _see('w_fm', 'enabled'), isNull,
+        reason:
+            'the framework button is the control below; a lookalike inside it is not');
   });
 }
