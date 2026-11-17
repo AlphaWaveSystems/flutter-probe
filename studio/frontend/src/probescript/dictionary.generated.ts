@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "7a437f34c821ce537e393573d989fc8cc02383ce68a5cba8bad9641a44d48af4";
+export const SOURCE_SHA256 = "b1b2e860585642e88a2ad7abba3ed0665745865a5610a63071347ce2aa3d3798";
 
 export const COMMANDS = [
   {
@@ -206,7 +206,7 @@ export const COMMANDS = [
   {
     "command": "see exactly",
     "syntax": "see exactly 3 \"Item\"",
-    "description": "Assert exact count of matching widgets",
+    "description": "Assert exact count of matching widgets: each visible text counts once (a `Text`, a `Text.rich`, a `RichText`, a button's label), so one `Text` is 1",
     "category": "Assertions"
   },
   {
