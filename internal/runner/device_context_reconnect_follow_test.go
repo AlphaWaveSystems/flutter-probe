@@ -51,7 +51,8 @@ func newReconnectRig(t *testing.T, hostPort int, tcp6, pm string, runAsToken str
 		"  *\"cat /proc/net/tcp\"*) cat " + r.dir + "/tcp;;\n" +
 		"  *\"pm list packages -U\"*) cat " + r.dir + "/pm;;\n" +
 		"  *run-as*\" rm \"*) exit 0;;\n" +
-		"  *run-as*) if [ -f " + r.dir + "/runas ]; then cat " + r.dir + "/runas; else exit 1; fi;;\n" +
+		// run-as answers with the token; with the file runas-once it answers once, as a cold start does before the app has written its token again
+		"  *run-as*) if [ -f " + r.dir + "/runas ]; then if [ -f " + r.dir + "/runas-once ] && [ -f " + r.dir + "/runas-done ]; then exit 1; fi; touch " + r.dir + "/runas-done; cat " + r.dir + "/runas; else exit 1; fi;;\n" +
 		"  *\"cat /data/local/tmp/probe/token\"*) cat " + r.dir + "/tmptoken;;\n" +
 		"  *) exit 0;;\nesac\n"
 	adb := filepath.Join(r.dir, "adb")
@@ -196,5 +197,34 @@ func TestReconnectWithARunAsTokenStartsOnTheFollowedPortAndMakesNoExtraCall(t *t
 		if strings.HasSuffix(f, "tcp:48911") {
 			t.Errorf("a forward went back to the configured port: %q", f)
 		}
+	}
+}
+
+// The cold start of the review: the run-as token is read and rejected (the holder answers 401), the token is read again, run-as no longer answers and the read falls back
+// to the shared file, whose token may be the holder's. The holder check runs again, and the redial is refused: nothing dials the holder with that token.
+func TestReconnectRefusesTheRedialWithASharedTokenAfterARunAsTokenWasRejected(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusUnauthorized) // the holder: it does not know the token of the app under test
+	}))
+	defer srv.Close()
+	hostPort, _ := strconv.Atoi(srv.Listener.Addr().String()[strings.LastIndex(srv.Listener.Addr().String(), ":")+1:])
+	r := newReconnectRig(t, hostPort, listenRow(48911, 10100), "package:com.first uid:10100\npackage:com.second uid:10200\n", "run-as-token-0123456789abcdef0123456789")
+	if err := os.WriteFile(filepath.Join(r.dir, "runas-once"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r.dc.DialTimeout = 5 * time.Second
+	client, err := r.dc.Reconnect(context.Background())
+	if client != nil {
+		client.Close()
+		t.Fatalf("a reconnect that must be refused returned a client")
+	}
+	var held *device.PortHeldError
+	if !errors.As(err, &held) || held.Holders[0] != "com.first" || held.App != "com.second" {
+		t.Fatalf("err = %v, want a *PortHeldError naming com.first and com.second", err)
+	}
+	if hits.Load() != 1 {
+		t.Errorf("%d dial(s) reached the holder, want exactly the first one, with the run-as token: the redial with the shared token must not happen", hits.Load())
 	}
 }

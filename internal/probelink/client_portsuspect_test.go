@@ -2,6 +2,7 @@ package probelink
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -166,5 +167,54 @@ func TestDialDoesNotAskOnPortSuspectBeforeTheGracePeriod(t *testing.T) {
 	defer client.Close()
 	if calls.Load() != 0 {
 		t.Errorf("the hook was asked %d time(s) during a start that took under %s", calls.Load(), portSuspectAfter)
+	}
+}
+
+type refusingErr struct{}
+
+func (refusingErr) Error() string    { return "the refresh found another app on the port" }
+func (refusingErr) RefuseDial() bool { return true }
+
+// A token refresh that says "do not dial again" stops the dial at once: no further attempt reaches the server, and the error is the caller's.
+func TestDialStopsWhenTheTokenRefreshRefuses(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	host, port := serverHostPort(t, srv)
+	var refreshes atomic.Int32
+	start := time.Now()
+	_, err := DialWithOptions(context.Background(), DialOptions{
+		Host: host, Port: port, Token: "t", DialTimeout: 20 * time.Second,
+		RefreshToken: func(context.Context) (string, error) { refreshes.Add(1); return "", refusingErr{} },
+	})
+	var r refusingErr
+	if !errors.As(err, &r) {
+		t.Fatalf("err = %v, want the refresh's own error", err)
+	}
+	if hits.Load() != 1 || refreshes.Load() != 1 || time.Since(start) > 4*time.Second {
+		t.Errorf("hits %d, refreshes %d, after %s: want one dial, one refresh and a prompt stop", hits.Load(), refreshes.Load(), time.Since(start))
+	}
+}
+
+// A refresh that merely fails to read a token keeps the old behaviour: the dial carries on.
+func TestDialCarriesOnWhenTheTokenRefreshJustFails(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	host, port := serverHostPort(t, srv)
+	ctx, cancel := context.WithTimeout(context.Background(), 3500*time.Millisecond)
+	defer cancel()
+	_, _ = DialWithOptions(ctx, DialOptions{
+		Host: host, Port: port, Token: "t", DialTimeout: 20 * time.Second,
+		RefreshToken: func(context.Context) (string, error) { return "", errors.New("no token to read") },
+	})
+	if hits.Load() < 2 {
+		t.Errorf("hits = %d, want the dial to try again after a refresh that only failed", hits.Load())
 	}
 }

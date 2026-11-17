@@ -474,3 +474,58 @@ func TestPortFollowerPreflightWithoutAnAppMakesNoCall(t *testing.T) {
 		t.Errorf("made %d adb call(s) and %d forward(s) without an app id, want none", len(adb.calls), len(fwd.calls))
 	}
 }
+
+// A token read again after a rejection can have fallen back from run-as to a shared source. CheckRefreshedToken runs the holder check again for it.
+func TestCheckRefreshedToken(t *testing.T) {
+	t.Run("a run-as token needs nothing and asks adb nothing", func(t *testing.T) {
+		adb := twoApps(48911, 0)
+		var notices []string
+		var changes []int
+		f := newTestFollower(adb, &fakeFwd{}, &notices, &changes)
+		if err := f.CheckRefreshedToken(context.Background(), TokenSourceRunAs, time.Minute); err != nil || len(adb.calls) != 0 {
+			t.Errorf("err %v, %d adb call(s), want nil and none", err, len(adb.calls))
+		}
+	})
+	t.Run("a shared-source token, another app holds the port, the app has none: refused", func(t *testing.T) {
+		for _, src := range []TokenSource{TokenSourceTmpFile, TokenSourceLogcat} {
+			adb := twoApps(48911, 0)
+			var notices []string
+			var changes []int
+			f := newTestFollower(adb, &fakeFwd{}, &notices, &changes)
+			fakeTime(f, nil)
+			err := f.CheckRefreshedToken(context.Background(), src, 3*time.Second)
+			var held *PortHeldError
+			if !errors.As(err, &held) || !held.RefuseDial() {
+				t.Errorf("source %v: err = %v, want a *PortHeldError that refuses the dial", src, err)
+			}
+		}
+	})
+	t.Run("a shared-source token, the app has opened its port: the forward follows it", func(t *testing.T) {
+		adb := twoApps(48911, 48912)
+		fwd := &fakeFwd{}
+		var notices []string
+		var changes []int
+		f := newTestFollower(adb, fwd, &notices, &changes)
+		if err := f.CheckRefreshedToken(context.Background(), TokenSourceLogcat, time.Minute); err != nil || f.DevicePort() != 48912 || len(fwd.calls) != 1 {
+			t.Errorf("err %v, port %d, forwards %v, want nil, 48912 and one forward", err, f.DevicePort(), fwd.calls)
+		}
+	})
+	t.Run("the source is recorded", func(t *testing.T) {
+		f := newTestFollower(twoApps(48911, 0), &fakeFwd{}, new([]string), new([]int))
+		_ = f.CheckRefreshedToken(context.Background(), TokenSourceRunAs, time.Minute)
+		f.mu.Lock()
+		got := f.source
+		f.mu.Unlock()
+		if got != TokenSourceRunAs {
+			t.Errorf("source = %v, want TokenSourceRunAs", got)
+		}
+	})
+}
+
+func TestPortHeldErrorRefusesTheDial(t *testing.T) {
+	var err error = &PortHeldError{Port: 1, Holders: []string{"a"}, App: "b"}
+	var r interface{ RefuseDial() bool }
+	if !errors.As(err, &r) || !r.RefuseDial() {
+		t.Errorf("*PortHeldError must say RefuseDial() is true")
+	}
+}
