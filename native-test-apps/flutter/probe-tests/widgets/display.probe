@@ -42,11 +42,15 @@ test "every widget of the screen is found by its id"
 
 # Widgets without text (docs/compat/NEXT.md, item 3). No text on this screen holds "Favorite", "Logo" or "AB", so each match below comes
 # from the widget itself. A semantic label is a text selector: when no visible text matches, the agent falls back to a Semantics label
-# (an Icon and an Image put their semanticLabel in one), as it does to a Tooltip message for an icon button. Reading that label back is
-# not supported yet: `see "Logo" contains "Logo"` reads "" (issue #818), so no test here reads it.
+# (an Icon and an Image put their semanticLabel in one), as it does to a Tooltip message for an icon button. The widget found that way
+# reads as its label (issue #818; before the fix it read as "").
 test "an Icon and an Image are found by their semantic label"
   see "Favorite"
   see "Logo"
+
+test "an Icon and an Image read as their semantic label"
+  see "Favorite" contains "Favorite"
+  see "Logo" contains "Logo"
 
 test "a CircleAvatar is found and read by its text"
   see "AB"
