@@ -240,6 +240,9 @@ type PingResult struct {
 	DartVersion       OptionalText `json:"dart_version,omitempty"`
 	// AppID is the application id of the app the agent runs in (see HandshakeResult). Optional: an older agent sends none.
 	AppID OptionalText `json:"app_id,omitempty"`
+	// ViewReadyMS is how long the agent waited for the app's view to get its real size before it answered (see HandshakeResult). Optional: an
+	// older agent sends none. Kept raw: only a plain integer in range is read (viewReadyMS).
+	ViewReadyMS json.RawMessage `json:"view_ready_ms,omitempty"`
 }
 
 // OptionalText is a text field an app may send or not. Anything but a JSON string (a number, null, an object) reads as "": an app is not trusted to send the

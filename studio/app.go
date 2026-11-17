@@ -89,7 +89,9 @@ type App struct {
 
 	recMu     sync.Mutex
 	recActive bool
-	recLines  []string
+	// sources are the bytes the last run parsed, kept to check an insertion by the line number of a failed step (insert_before.go).
+	sources  runSources
+	recLines []string
 	// recClient is the client the recorder's notification handler was set on, and recHandler the handler: StopRecording clears the one it set (not
 	// whatever the connection holds then), and a run that reconnects takes the recording over to the new client (see carryRecording).
 	recClient  *probelink.Client
@@ -192,11 +194,48 @@ func (a *App) InitialWorkspace() string {
 // (agent port, timeout, device ids) instead of the process working directory.
 func (a *App) SetWorkspace(path string) {
 	a.mu.Lock()
+	changed := a.workspace != path
 	a.workspace = path
 	a.humanWorkspace = path // the person opened it: automation may work inside it
 	a.export.clear()        // and the results of a run in another workspace are not this one's to export (under the lock keepForExport checks the workspace with)
 	a.mu.Unlock()
 	a.resetFixAttempts() // another workspace is another session of suggestions
+	if changed {
+		a.sources.reset() // and the text of its last run is not kept (opening the same folder again keeps it: they are the same files)
+	}
+}
+
+var (
+	errCloseDuringRun       = fmt.Errorf("a run is in progress: cancel it before closing the workspace")
+	errCloseDuringRecording = fmt.Errorf("a recording is in progress: stop it before closing the workspace")
+)
+
+// CloseWorkspace closes the workspace a person opened (the window's Close button): it is SetWorkspace with no folder, refused while a run or a
+// recording is going. The check is here and not only in the page, so a script with the bridge token cannot pull the workspace from under a run either.
+// A connection that exists is not dropped, and keeps the probe.yaml configuration it was made with.
+func (a *App) CloseWorkspace() error {
+	// The run slot, the recording flag and the change are one step: a run cannot take the slot between the check and the change. The lock order is
+	// the run slot's, then a.mu (no code takes them the other way round: claimRun takes them one after the other, never nested).
+	a.runMu.Lock()
+	a.mu.Lock()
+	switch {
+	case a.runCancel != nil:
+		a.mu.Unlock()
+		a.runMu.Unlock()
+		return errCloseDuringRun
+	case a.recActive:
+		a.mu.Unlock()
+		a.runMu.Unlock()
+		return errCloseDuringRecording
+	}
+	a.workspace = ""
+	a.humanWorkspace = ""
+	a.export.clear()
+	a.mu.Unlock()
+	a.runMu.Unlock()
+	a.resetFixAttempts()
+	a.sources.reset()
+	return nil
 }
 
 // useWorkspace switches the open workspace on behalf of the automation endpoint. Unlike
@@ -828,6 +867,7 @@ func (a *App) runOptions(conn *connection, path string, sel runSelection) runner
 		Timeout:   conn.cfg.Defaults.Timeout,
 		Verbose:   false,
 		OnClient:  func(c probelink.ProbeClient) { a.adoptClient(conn, c) },
+		ReadFile:  a.sources.readAndKeep, // the bytes the run parses are kept for CheckInsertBefore
 	}
 }
 
@@ -1191,6 +1231,7 @@ func (a *App) executeRun(runCtx context.Context, path string, sel runSelection, 
 	a.emit("run:started", path)
 	a.emit("run:plan", plan)
 
+	a.sources.reset() // the last run's text is not the new run's
 	r := runner.New(conn.cfg, a.clientOf(conn), conn.deviceCtx, a.runOptions(conn, path, sel))
 	r.OnResult(func(res runner.TestResult) {
 		rr := a.runResultFor(res, conn)
