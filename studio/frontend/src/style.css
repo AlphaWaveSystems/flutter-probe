@@ -730,3 +730,5 @@ kbd {
 #results-list li.note-timeout { color: var(--warn); }
 #results-list li.note-retry { color: var(--warn); }
 #results-list li.note-attempt { padding-left: 40px; }
+
+#results-list li.step-triage .triage-insert { margin-left: 8px; flex-shrink: 0; }

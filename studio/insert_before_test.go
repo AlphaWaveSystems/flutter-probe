@@ -161,6 +161,39 @@ func TestInsertBeforeRefusesLinesThatHoldMoreThanTheFailedStepOrAnotherStep(t *t
 	}
 }
 
+// A run that is going (seen by the tracker, however it started) stops the check.
+func TestInsertBeforeIsRefusedWhileARunIsGoing(t *testing.T) {
+	f := newInsertFixture(t, insertBase, 3, `tap "Sign in"`)
+	f.a.track.mu.Lock()
+	f.a.track.st.Running = true
+	f.a.track.mu.Unlock()
+	if got := f.check(insertBase); got.OK || !strings.Contains(got.Reason, "run is in progress") {
+		t.Errorf("during a run: %+v", got)
+	}
+	f.a.track.mu.Lock()
+	f.a.track.st.Running = false
+	f.a.track.mu.Unlock()
+	if got := f.check(insertBase); !got.OK {
+		t.Errorf("after the run: %+v", got)
+	}
+}
+
+// A conflict on one path (read twice with other bytes) drops that path only: the other files of the run stay kept.
+func TestAConflictOnOnePathKeepsTheOthers(t *testing.T) {
+	dir := t.TempDir()
+	a, b := filepath.Join(dir, "a.probe"), filepath.Join(dir, "b.probe")
+	var s runSources
+	s.keep(a, []byte("a1"))
+	s.keep(b, []byte("b1"))
+	s.keep(a, []byte("a2")) // a conflicts
+	if _, ok := s.keptText(dir, a); ok {
+		t.Error("a conflicting path was kept")
+	}
+	if got, ok := s.keptText(dir, b); !ok || got != "b1" {
+		t.Errorf("an unrelated file was dropped with it: %q, %v", got, ok)
+	}
+}
+
 // A line that holds two steps (`tap "A"; tap "B"`) is refused even when the second one is the step that failed: the line number does not name it.
 func TestInsertBeforeRefusesALineWithTwoSteps(t *testing.T) {
 	text := "test \"t\"\n  open the app\n  tap \"A\"; tap \"B\"\n"
@@ -230,7 +263,7 @@ func TestAFileReadTwiceInARunKeepsTheFirstReadOrNothing(t *testing.T) {
 
 // A selector that the step description cannot show as it is gets no button: the description is written with %q.
 func TestInsertBeforeRefusesSelectorsADescriptionCannotShowAsTheyAre(t *testing.T) {
-	for name, sel := range map[string]string{"backslash": `a\b`, "zero-width space": "a\u200bb", "tab": "a\tb", "bidi isolate": "a\u2066b", "soft hyphen": "a\u00adb"} {
+	for name, sel := range map[string]string{"backslash": `a\b`, "zero-width space": "a\u200bb", "tab": "a\tb", "bidi isolate": "a\u2066b", "soft hyphen": "a\u00adb", "braille blank": "a\u2800b"} {
 		text := "test \"t\"\n  open the app\n  tap \"" + sel + "\"\n"
 		f := newInsertFixture(t, text, 3, `tap "`+sel+`"`)
 		if got := f.a.CheckInsertBefore(f.file, 3, f.file, text); got.OK {
