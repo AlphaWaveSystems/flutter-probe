@@ -291,7 +291,11 @@ func (f *PortFollower) follow(ctx context.Context) bool {
 	}
 	var holder string
 	if names := PortOwners(ctx, f.runner, f.serial, cur, f.appID); len(names) > 0 {
-		holder = " is held by " + strings.Join(names, ", ")
+		shown := make([]string, len(names))
+		for i, n := range names {
+			shown[i] = CleanOneLine(n, 80) // a package name read from the device, printed
+		}
+		holder = " is held by " + strings.Join(shown, ", ")
 	} else {
 		holder = " is not the app's"
 	}
@@ -305,7 +309,7 @@ func (f *PortFollower) follow(ctx context.Context) bool {
 		f.onChange(port)
 	}
 	if f.notice != nil {
-		f.notice(fmt.Sprintf("agent port %d on the device%s; using %d for %s", cur, holder, port, f.appID))
+		f.notice(fmt.Sprintf("agent port %d on the device%s; using %d for %s", cur, holder, port, CleanOneLine(f.appID, 80)))
 	}
 	return true
 }
