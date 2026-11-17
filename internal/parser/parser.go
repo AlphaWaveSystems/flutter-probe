@@ -1234,6 +1234,16 @@ func (p *Parser) parseAssertSee(negated bool) (Step, error) {
 	case TOKEN_FOCUSED:
 		p.advance()
 		check = StateFocused
+	default:
+		// "filled" and "empty" are words only here, right after the selector: they are not reserved, so a variable or a
+		// recipe called `empty` keeps its meaning everywhere else (`store "" as empty`).
+		if p.peekLiteral("filled") {
+			p.advance()
+			check = StateFilled
+		} else if p.peekLiteral("empty") {
+			p.advance()
+			check = StateEmpty
+		}
 	}
 
 	// regex pattern "matching ..."
@@ -1241,6 +1251,9 @@ func (p *Parser) parseAssertSee(negated bool) (Step, error) {
 	if p.peek().Type == TOKEN_MATCHING {
 		p.advance()
 		pattern = p.expectString("regex pattern")
+		if check == StateFilled || check == StateEmpty {
+			return nil, fmt.Errorf("line %d: \"is filled\" and \"is empty\" only say whether the field holds a character: they never read its text, so they cannot be combined with \"matching\"", line)
+		}
 	}
 
 	withAI := p.checkWithAI()
