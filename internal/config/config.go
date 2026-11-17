@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/alphawavesystems/flutter-probe/internal/ios"
 )
 
 // validAppID matches valid bundle identifiers / Android package names.
@@ -296,6 +298,11 @@ func LoadFile(path string) (*Config, error) {
 	// Validate security-sensitive fields
 	if cfg.Project.App != "" && !validAppID.MatchString(cfg.Project.App) {
 		return nil, fmt.Errorf("invalid project.app %q: must be alphanumeric with dots/underscores (e.g. com.example.myapp)", cfg.Project.App)
+	}
+
+	// device.ios_device_id becomes a simulator or device id, and a simulator id shapes host paths: only a UDID is accepted.
+	if id := cfg.Device.IOSDeviceID; id != "" && !ios.ValidSimulatorUDID(id) && !ios.ValidDeviceUDID(id) {
+		return nil, fmt.Errorf("invalid device.ios_device_id %q in %s: use the UDID of a simulator (xcrun simctl list devices) or of a device (xcrun devicectl list devices)", id, path)
 	}
 
 	if p := cfg.Agent.DriverPort; p != 0 && (p < 1024 || p > 65535) {
