@@ -144,6 +144,9 @@ func (a *App) CheckReplaceLine(id, openFile, content string) ReplaceLineCheck {
 	case normalizedSource(content) != normalizedSource(kept):
 		return refuse("the file changed since the run: run again")
 	}
+	// From here on the text is read the way the parser and the run's line numbers read it: one line break style, no byte-order mark. A lone CR is a line
+	// break to the parser, so splitting the raw text on LF alone could take a different line than the one the run's line number names.
+	content = normalizedSource(content)
 	text, why := plainSuggestionLine(r.suggestion)
 	if why != "" {
 		return refuse(why)

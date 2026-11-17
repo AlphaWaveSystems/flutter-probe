@@ -120,3 +120,25 @@ func TestReplaceLineRefusesAStepThatIsNotTheFailedOneOfTheHeldRun(t *testing.T) 
 		t.Errorf("another step text: %+v", got)
 	}
 }
+
+// A lone CR is a line break to the parser. The editor never holds one (it normalises line endings), but the check must not depend on that: with the
+// run's text and the editor's text equal after normalisation, the line is found in the normalised text, so the line that is replaced is the line the run
+// names, and the new text is built from it.
+func TestReplaceLineReadsALoneCarriageReturnAsALineBreak(t *testing.T) {
+	a, id := anchorApp(t)
+	loneCR := strings.ReplaceAll(anchorBody(), "\n", "\r") // every break a lone CR: the same lines
+	got := a.CheckReplaceLine(id, anchorFile, loneCR)
+	if !got.OK || got.Line != 4 || got.Text != `  tap "Sign in now"` {
+		t.Fatalf("%+v", got)
+	}
+	// a mix: the kept text has LF, the editor's has a lone CR in one place; still the same lines
+	mixed := strings.Replace(anchorBody(), "  tap \"Go\"\n", "  tap \"Go\"\r", 1)
+	if got := a.CheckReplaceLine(id, anchorFile, mixed); !got.OK || got.Line != 4 {
+		t.Errorf("mixed: %+v", got)
+	}
+	// and a lone CR that makes a different line count is not the run's text
+	moved := strings.Replace(anchorBody(), `  tap "Go"`, "  tap \"Go\"\r  # extra", 1)
+	if got := a.CheckReplaceLine(id, anchorFile, moved); got.OK {
+		t.Errorf("an extra line made with a lone CR was accepted: %+v", got)
+	}
+}
