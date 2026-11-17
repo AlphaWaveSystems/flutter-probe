@@ -656,7 +656,11 @@ class ProbeExecutor {
         await Future.delayed(const Duration(milliseconds: 100));
         if (_screenFingerprint() != before) return;
       }
-      _tapWarning = 'tap target ${_selDesc(sel)} is covered by another widget at '
+      _tapWarning = _ignoreCutsOwnHandler(box)
+          ? 'tap target ${_selDesc(sel)} is inside an IgnorePointer, so it receives no taps; the tap at '
+              '(${warnCenter.dx.round()}, ${warnCenter.dy.round()}) did nothing and the screen did not change'
+              '${_visibleHint()}'
+          : 'tap target ${_selDesc(sel)} is covered by another widget at '
           '(${warnCenter.dx.round()}, ${warnCenter.dy.round()}); the tap lands on whatever is on top '
           'and the screen did not change (topmost hit: ${_hitPathDesc(warnCenter)})'
           '${_keyboardHint()}'
@@ -770,6 +774,28 @@ class ProbeExecutor {
     }
   }
 
+  /// Whether [r] or anything inside it takes pointers (a button's own InkWell under the matched button).
+  bool _subtreeHandlesPointer(RenderObject r) {
+    if (_handlesPointer(r)) return true;
+    var found = false;
+    r.visitChildren((c) {
+      if (!found && _subtreeHandlesPointer(c)) found = true;
+    });
+    return found;
+  }
+
+  /// Whether an [IgnorePointer] that ignores cut off a handler of [r]'s own: one inside [r], or between [r] and the IgnorePointer (a
+  /// button's InkWell). Only then is "it receives no taps" true; a passive label inside an IgnorePointer under a tile that takes the tap
+  /// does receive it (issue #842).
+  bool _ignoreCutsOwnHandler(RenderObject r) {
+    var handlerBelow = _subtreeHandlesPointer(r);
+    for (RenderObject? c = r; c != null; c = c.parent) {
+      if (_handlesPointer(c)) handlerBelow = true;
+      if (c is RenderIgnorePointer && c.ignoring && handlerBelow) return true;
+    }
+    return false;
+  }
+
   bool _handlesPointer(RenderObject r) =>
       r is RenderPointerListener || r is RenderMouseRegion || r is RenderSemanticsGestureHandler;
 
@@ -793,9 +819,20 @@ class ProbeExecutor {
     // something that handles taps (a parent GestureDetector/InkWell). Stopping
     // at a passive container or the root view means nothing received the tap
     // at that point (clipped away, off screen, under the keyboard).
+    // A widget inside an IgnorePointer is skipped by the hit test, which then stops at whatever takes pointers below it, often a
+    // scrollable's own listener around it. That is not a parent handling the tap when the IgnorePointer cut off a handler of the target's
+    // own (in the target, or between it and the IgnorePointer: a button's InkWell): then the hit is unrelated (issue #842). A passive
+    // label inside an IgnorePointer, under a parent GestureDetector that takes the tap, stays related.
     if (!related && _handlesPointer(deepest)) {
+      var handlerBelow = _subtreeHandlesPointer(target);
+      var ignoredOnTheWay = false;
       for (RenderObject? c = target; c != null; c = c.parent) {
-        if (identical(c, deepest)) related = true;
+        if (identical(c, deepest)) {
+          related = !ignoredOnTheWay;
+          break;
+        }
+        if (_handlesPointer(c)) handlerBelow = true;
+        if (c is RenderIgnorePointer && c.ignoring && handlerBelow) ignoredOnTheWay = true;
       }
     }
     return (strict: strict, related: related);
@@ -1283,11 +1320,11 @@ class ProbeExecutor {
   String? _stateCheckFailureReason(Element element, String check, String checkVal) {
     switch (check) {
       case 'enabled':
-        if (_isDisabled(element)) return 'is disabled';
-        return null;
       case 'disabled':
-        if (!_isDisabled(element)) return 'is enabled';
-        return null;
+        final disabled = _isDisabled(element);
+        if (disabled == null) _refuseUnreadControl(element, _enabledReadNames, check);
+        if (check == 'enabled') return disabled! ? 'is disabled' : null;
+        return disabled! ? null : 'is enabled';
       case 'contains':
         final text = _textOf(element);
         // An obscured field's text is never read, so nothing can be checked on it.
@@ -1307,6 +1344,7 @@ class ProbeExecutor {
         // passed for every widget, whatever its value.
         final checked = _checkedState(element);
         if (checked == null) {
+          _refuseUnreadControl(element, _checkedReadNames, check);
           return 'is not a checkable control (Switch, Checkbox, Radio, their ListTile variants, FilterChip or ChoiceChip)';
         }
         return checked ? null : 'is not checked';
@@ -2111,10 +2149,46 @@ class ProbeExecutor {
   /// selector matches is usually the `Text` inside a button, so the nearest enclosing
   /// control (button, icon button, FAB, text field, switch, checkbox) decides — a
   /// grey `ElevatedButton(onPressed: null, child: Text("Submit"))` is disabled.
-  bool _isDisabled(Element e) {
+  ///
+  /// The order is the checked reader's: the target, then what it holds, then what holds it (up to 40).
+  ///  - What it holds (issue #860): an id on a wrapper (`SizedBox(key: ...)`, `KeyedSubtree`, `Semantics(identifier: ...)`) around a
+  ///    disabled button used to read as enabled. The first control on each branch counts. When the controls held agree (all enabled, or all
+  ///    disabled), that is the answer; when they disagree (an enabled and a disabled button in a `Row`), there is no one answer, so the
+  ///    step refuses rather than pick by tree order.
+  ///  - null when the control to read is one whose state the agent cannot read: a widget named like a control it reads (an
+  ///    `ElevatedButton`) that is not that class, as with `package:material_ui` (issue #852). Reading it as enabled was a false pass.
+  bool? _isDisabled(Element e) {
     final own = _controlDisabled(e.widget);
     if (own != null) return own;
+    if (_isLookalike(e.widget, _enabledReadNames)) return null;
+
+    final held = <Element>[];
+    var lookalikeHeld = false;
+    void visit(Element c) {
+      if (_controlDisabled(c.widget) != null) {
+        held.add(c);
+        return;
+      }
+      if (_isLookalike(c.widget, _enabledReadNames)) {
+        lookalikeHeld = true;
+        return;
+      }
+      c.visitChildren(visit);
+    }
+
+    e.visitChildren(visit);
+    if (lookalikeHeld) return null;
+    final states = held.map((c) => _controlDisabled(c.widget)!).toSet();
+    if (states.length > 1) {
+      final names = held.map((c) => '${_typeName(c.widget)} (${_controlDisabled(c.widget)! ? 'disabled' : 'enabled'})').join(', ');
+      throw ProbeError(ProbeError.assertFailed,
+          '"is enabled" and "is disabled" cannot be evaluated: the target holds ${held.length} controls that disagree ($names), so its '
+          'state is not one answer; put the id on the control to check');
+    }
+    if (states.isNotEmpty) return states.single;
+
     bool? found;
+    var unread = false;
     var depth = 0;
     e.visitAncestorElements((a) {
       final d = _controlDisabled(a.widget);
@@ -2122,9 +2196,98 @@ class ProbeExecutor {
         found = d;
         return false;
       }
+      if (_isLookalike(a.widget, _enabledReadNames)) {
+        unread = true;
+        return false;
+      }
       return ++depth < 40;
     });
-    return found ?? (e.widget is GestureDetector && (e.widget as GestureDetector).onTap == null);
+    if (found != null) return found;
+    if (unread) return null;
+    return e.widget is GestureDetector && (e.widget as GestureDetector).onTap == null;
+  }
+
+  /// The type name of the first lookalike of [names] below [e] (in its subtree), or null. A control the agent reads that comes first on a
+  /// branch ends that branch: the lookalike must be what the target holds, not something deeper inside a control that is read.
+  String? _lookalikeBelow(Element e, Map<String, bool Function(Widget)> names) {
+    String? found;
+    void visit(Element c) {
+      if (found != null) return;
+      if (_isLookalike(c.widget, names)) {
+        found = _typeName(c.widget);
+        return;
+      }
+      if (names[_typeName(c.widget)] != null) return; // the framework's own control: read, not a lookalike
+      c.visitChildren(visit);
+    }
+    e.visitChildren(visit);
+    return found;
+  }
+
+  /// The type name of [w] without its type arguments (`Radio<int>` is `Radio`).
+  static String _typeName(Widget w) => w.runtimeType.toString().split('<').first;
+
+  /// The controls whose enabled state the agent reads from their class (`_controlDisabled`), and whose checked state it reads
+  /// (`_checkedState`), each with the test for the framework's own class. A widget with one of these names that is not the framework's
+  /// class is another library's (issue #852: `package:material_ui`, `package:cupertino_ui`): a lookalike.
+  static final Map<String, bool Function(Widget)> _enabledReadNames = {
+    'ElevatedButton': (w) => w is ButtonStyleButton,
+    'FilledButton': (w) => w is ButtonStyleButton,
+    'OutlinedButton': (w) => w is ButtonStyleButton,
+    'TextButton': (w) => w is ButtonStyleButton,
+    'IconButton': (w) => w is IconButton,
+    'FloatingActionButton': (w) => w is FloatingActionButton,
+    'TextField': (w) => w is TextField,
+    'Switch': (w) => w is Switch,
+    'Checkbox': (w) => w is Checkbox,
+  };
+  static final Map<String, bool Function(Widget)> _checkedReadNames = {
+    'Checkbox': (w) => w is Checkbox,
+    'Switch': (w) => w is Switch,
+    'Radio': (w) => w is Radio,
+    'CheckboxListTile': (w) => w is CheckboxListTile,
+    'SwitchListTile': (w) => w is SwitchListTile,
+    'RadioListTile': (w) => w is RadioListTile,
+    'FilterChip': (w) => w is FilterChip,
+    'ChoiceChip': (w) => w is ChoiceChip,
+    'CupertinoSwitch': (w) => w is CupertinoSwitch,
+    'CupertinoRadio': (w) => w is CupertinoRadio,
+  };
+
+  /// Whether [w] has the name of a control in [names] but is not that framework class.
+  static bool _isLookalike(Widget w, Map<String, bool Function(Widget)> names) {
+    final isFramework = names[_typeName(w)];
+    return isFramework != null && !isFramework(w);
+  }
+
+  /// Throws when [e], or one of its ancestors within 40, is a lookalike of a control in [names] (its name, not its class): the
+  /// state check refuses instead of guessing (a negated check too: "cannot tell" is not "not in that state").
+  void _refuseUnreadControl(Element e, Map<String, bool Function(Widget)> names, String check) {
+    // The same places the readers look: the target, then what it holds, then what holds it (up to 40).
+    String? where;
+    String? name = _isLookalike(e.widget, names) ? _typeName(e.widget) : null;
+    if (name != null) where = 'is';
+    if (name == null) {
+      name = _lookalikeBelow(e, names);
+      if (name != null) where = 'holds';
+    }
+    if (name == null) {
+      var depth = 0;
+      e.visitAncestorElements((a) {
+        if (_isLookalike(a.widget, names)) {
+          name = _typeName(a.widget);
+          return false;
+        }
+        return ++depth < 40;
+      });
+      if (name != null) where = 'is inside';
+    }
+    if (name == null) return;
+    final article = RegExp(r'^[AEIOU]').hasMatch(name!) ? 'an' : 'a';
+    throw ProbeError(ProbeError.assertFailed,
+        '"is $check" cannot be evaluated: the target $where $article $name that is not the class of package:flutter/material.dart or '
+        'cupertino.dart the agent reads; a control of package:material_ui or cupertino_ui is not recognised yet (issue #852). '
+        'Assert on its text or content instead, or see "Apps on material_ui or cupertino_ui" at https://flutterprobe.dev/tools/agent/');
   }
 
   /// null when [w] is not a control this knows how to read.

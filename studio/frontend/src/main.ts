@@ -25,6 +25,7 @@ import { initSendPanel } from "./send-panel";
 import { buildWiFiItem, type DocLike } from "./wifi-label";
 import { placeStep } from "./send-insert";
 import { initResults, runIsGoing, type RunPlan, type RunStep } from "./results";
+import { isTextEntry } from "./typing-target";
 import { runScopeArgs, type RunMode } from "./run-scope";
 import { toast } from "./toast";
 
@@ -577,13 +578,20 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (e.key === "?" && !mod) {
-    // Avoid triggering when the editor has focus and the user types a literal `?`.
-    if (document.activeElement?.closest("#editor")) return;
+    // A `?` typed into a field is text: the editor, the chat input, the send panel's fields, every input that takes text (typing-target.ts).
+    if (document.activeElement?.closest("#editor") || isTextEntry(document.activeElement as HTMLElement | null)) return;
     e.preventDefault();
     openHelpOverlay();
     return;
   }
   if (!mod) return;
+  // While an overlay is open (the help card, the settings, the WiFi list, a question about sending or deleting) the other shortcuts are off: the overlay is a
+  // question on top of the window, and a Cmd+P under it would open a folder dialog the person cannot see the reason for. Escape closes it.
+  if (document.querySelector(".overlay:not([hidden])")) {
+    // still the browser's own Save, Print and reload must not run under the card: the shortcuts' keys are taken, and do nothing
+    if ("srbpk".includes(e.key.toLowerCase()) || (e.key.toLowerCase() === "a" && e.shiftKey)) e.preventDefault();
+    return;
+  }
   switch (e.key.toLowerCase()) {
     case "s":
       e.preventDefault();

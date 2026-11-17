@@ -110,6 +110,9 @@ jobs:
       - name: Frontend tests (save as)
         working-directory: studio/frontend
         run: npm run test:save-as
+      - name: Typing target tests
+        working-directory: studio/frontend
+        run: npm run test:typing-target
       - name: Modal focus tests
         working-directory: studio/frontend
         run: npm run test:modal-focus
