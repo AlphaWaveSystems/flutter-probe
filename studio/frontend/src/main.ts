@@ -1792,6 +1792,7 @@ function updateConnectButton() {
 });
 $("btn-refresh").addEventListener("click", refreshDevices);
 
+let connectAttempt = 0;
 $("btn-connect").addEventListener("click", async () => {
   if (connected) {
     try {
@@ -1806,6 +1807,7 @@ $("btn-connect").addEventListener("click", async () => {
   const select = $("device-picker") as HTMLSelectElement;
   const id = select.value;
   if (!id) return;
+  const attempt = ++connectAttempt; // a result that comes back after a newer attempt started is not about the screen any more
   setStatus("connecting", "connecting…");
   try {
     const status = (await Connect(id)) as ConnectionStatus;
@@ -1820,6 +1822,7 @@ $("btn-connect").addEventListener("click", async () => {
     if (status.toolsNote) toast(status.toolsNote, "info", 8000); // the connection uses a program that probe.yaml names: said, not silent
   } catch (err) {
     const detail = enrichError(err);
+    if (attempt !== connectAttempt) return; // superseded: a newer Connect is under way or has finished, and its result is the one shown
     // The reason stays in the status (full text as the tooltip) until the person picks another device or connects again.
     setStatus("error", connectFailureLine(detail), detail);
     toast(`Connect failed: ${detail}`, "error", 8000);

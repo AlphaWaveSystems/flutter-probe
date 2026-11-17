@@ -5,8 +5,10 @@ import { openStudio, workspace } from "./helpers";
 // "disconnected" after 2.5 seconds, and the toast with the reason is gone after 8. The Go calls are answered by hand.
 
 const reason = "agent token: timeout waiting for the token (is the app running with PROBE_AGENT=true?)";
+const secondReason = "dial: connection refused on port 48690";
 
 async function failingConnect(page: Page) {
+  let calls = 0;
   await page.route("**/__headless/call", async (route) => {
     const body = route.request().postData() ?? "";
     if (body.includes('"method":"ListDevices"')) {
@@ -16,7 +18,7 @@ async function failingConnect(page: Page) {
       ] } });
     }
     if (body.includes('"method":"DeviceListNote"')) return route.fulfill({ json: { result: "" } });
-    if (body.includes('"method":"Connect"')) return route.fulfill({ json: { error: reason } });
+    if (body.includes('"method":"Connect"')) return route.fulfill({ json: { error: calls++ === 0 ? reason : secondReason } });
     await route.continue();
   });
   await openStudio(page);
@@ -39,11 +41,37 @@ test.describe("A failed connection", () => {
     await expect(status).toHaveText("disconnected");
   });
 
-  test("cf-02 a new Connect replaces the failure with 'connecting' and then with its own result", async ({ page }) => {
+  test("cf-02 a new Connect replaces the failure with its own reason, not a stale line", async ({ page }) => {
     await failingConnect(page);
     await page.click("#btn-connect");
     await expect(page.locator("#status-text")).toContainText("connection failed");
     await page.click("#btn-connect");
-    await expect(page.locator("#status-text")).toContainText("connection failed: agent token"); // failed again, with the same reason, not a stale line
+    await expect(page.locator("#status-text")).toContainText("connection failed: dial: connection refused"); // the second attempt's own reason, not the first one's line
+  });
+
+  test("cf-03 a failure that comes back after a newer Connect has succeeded does not replace the connected status", async ({ page }) => {
+    let calls = 0;
+    await page.route("**/__headless/call", async (route) => {
+      const body = route.request().postData() ?? "";
+      if (body.includes('"method":"ListDevices"')) return route.fulfill({ json: { result: [{ id: "emu-1", name: "Pixel Test", platform: "android", kind: "emulator", state: "device", booted: true }] } });
+      if (body.includes('"method":"DeviceListNote"')) return route.fulfill({ json: { result: "" } });
+      if (body.includes('"method":"Connect"')) {
+        if (calls++ === 0) {
+          await new Promise((r) => setTimeout(r, 1500)); // the first attempt is slow, and then fails
+          return route.fulfill({ json: { error: reason } });
+        }
+        return route.fulfill({ json: { result: { connected: true, deviceId: "emu-1", deviceName: "Pixel Test", platform: "android" } } });
+      }
+      await route.continue();
+    });
+    await openStudio(page);
+    await page.click("#btn-refresh");
+    await page.locator("#device-picker").selectOption({ label: "Pixel Test  ·  android" });
+    await page.click("#btn-connect"); // A: slow
+    await page.click("#btn-connect"); // B: succeeds at once (Connect is not disabled while connecting)
+    await expect(page.locator("#status-text")).toContainText("Pixel Test");
+    await page.waitForTimeout(2200); // A fails now
+    await expect(page.locator("#status-text")).toContainText("Pixel Test");
+    await expect(page.locator("#status-text")).not.toContainText("connection failed");
   });
 });
