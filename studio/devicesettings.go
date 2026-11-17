@@ -66,7 +66,9 @@ func (a *App) GetDeviceSettings() (DeviceSettingsInfo, error) {
 	if conn.cfg != nil {
 		appID = conn.cfg.Project.App
 	}
-	return settingsTarget(conn.deviceID, conn.deviceName, conn.platform, appID, devs), nil
+	info := settingsTarget(conn.deviceID, conn.deviceName, conn.platform, appID, devs)
+	info.Platform = conn.platformName()
+	return info, nil
 }
 
 // ApplyDeviceSetting changes one setting on the connected device. app is the application id for a language change or

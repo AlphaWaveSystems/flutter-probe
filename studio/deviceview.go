@@ -78,7 +78,7 @@ func (a *App) GetDeviceView() (DeviceViewInfo, error) {
 	if conn.view == nil {
 		hub, err := deviceview.New(deviceview.Options{
 			Agent:  deviceview.NewProbeAgent(liveClient{ProbeClient: conn.client, current: func() probelink.ProbeClient { return a.clientOf(conn) }}),
-			Device: deviceview.DeviceInfo{ID: conn.deviceID, Platform: string(conn.platform), Name: conn.deviceName},
+			Device: deviceview.DeviceInfo{ID: conn.deviceID, Platform: conn.platformName(), Name: conn.deviceName},
 			// Input is on: the pane lets the user tap, swipe and type in the app. ExtraOrigins is only set in headless mode.
 			ViewOnly:     false,
 			ExtraOrigins: a.viewOrigins,

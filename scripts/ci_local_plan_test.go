@@ -57,8 +57,9 @@ func planIn(t *testing.T, touched []string, args ...string) string {
 	return string(out)
 }
 
-// The Studio frontend check protects the generated dictionary. The hosted workflow only runs for studio/ and vscode/, so a
-// change to the docs it is made from must pull the check into a default run, and nothing else may.
+// The Studio frontend check protects the generated dictionary, and the VS Code extension tests the generated keywords and snippets,
+// all made from the ProbeScript docs. The hosted workflows only run for studio/ and vscode/, so a change to the docs must pull both
+// checks into a default run, and nothing else may.
 func TestCILocalAddsTheStudioFrontendForDictionaryInputs(t *testing.T) {
 	for _, f := range []string{
 		"website/src/content/docs/probescript/grammar.md",
@@ -67,10 +68,10 @@ func TestCILocalAddsTheStudioFrontendForDictionaryInputs(t *testing.T) {
 		"studio/frontend/src/probescript/dictionary.generated.ts",
 	} {
 		out := planIn(t, []string{f})
-		if !strings.Contains(out, "Studio frontend\n") || !strings.Contains(out, "the change touches "+f) {
+		if !strings.Contains(out, "Studio frontend\n") || !strings.Contains(out, "VS Code extension tests\n") || !strings.Contains(out, "the change touches "+f) {
 			t.Errorf("%s: plan = %q", f, out)
 		}
-		if strings.Count(out, "\n") != 7 { // five required checks, the frontend, the note
+		if strings.Count(out, "\n") != 8 { // five required checks, the frontend, the extension, the note
 			t.Errorf("%s: unexpected plan size: %q", f, out)
 		}
 	}
@@ -83,7 +84,7 @@ func TestCILocalDoesNotAddTheStudioFrontendForOtherChanges(t *testing.T) {
 		"website/src/content/docs/probescript/image.png",
 		"studio/frontend/src/other/x.ts",
 	} {
-		if out := planIn(t, []string{f}); strings.Contains(out, "Studio frontend") {
+		if out := planIn(t, []string{f}); strings.Contains(out, "Studio frontend") || strings.Contains(out, "VS Code extension tests") {
 			t.Errorf("%s: plan = %q", f, out)
 		}
 	}
@@ -93,7 +94,7 @@ func TestCILocalDoesNotAddTheStudioFrontendForOtherChanges(t *testing.T) {
 	}
 	// --all already has the check once, with no note
 	out := planIn(t, []string{"website/src/content/docs/probescript/grammar.md"}, "--all")
-	if strings.Count(out, "Studio frontend\n") != 1 || strings.Contains(out, "added") {
+	if strings.Count(out, "Studio frontend\n") != 1 || strings.Count(out, "VS Code extension tests\n") != 1 || strings.Contains(out, "added") {
 		t.Errorf("--all: plan = %q", out)
 	}
 }

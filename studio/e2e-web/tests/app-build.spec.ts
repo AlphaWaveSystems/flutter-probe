@@ -77,4 +77,52 @@ test.describe("The build of the app under test", () => {
     await fire(page, "connection:changed", { connected: true, deviceId: "emu-1", deviceName: "Pixel Test", platform: "android", appBuild: "App built with Flutter 3.44.8" });
     await expect(line(page)).toHaveText("App built with Flutter 3.44.8");
   });
+
+  test("bv-05 a long line stays inside the Device pane: it wraps, and does not reach the editor", async ({ page }) => {
+    const long = "App built with Flutter 3.44.8 (stable), Dart 3.12.2 · framework revision " + "1a2b3c4d5e".repeat(12) + " · engine " + "f".repeat(80);
+    await connectWith(page, long);
+    await expect(line(page)).toBeVisible();
+    const boxes = await page.evaluate(() => {
+      const r = (id: string) => document.getElementById(id)!.getBoundingClientRect();
+      const l = document.getElementById("app-build")!;
+      return { line: r("app-build"), pane: r("device-pane"), editor: r("editor-pane"), overflowX: l.scrollWidth > l.clientWidth };
+    });
+    expect(boxes.overflowX).toBe(false);
+    expect(boxes.line.left).toBeGreaterThanOrEqual(boxes.pane.left - 0.5);
+    expect(boxes.line.right).toBeLessThanOrEqual(boxes.pane.right + 0.5);
+    expect(boxes.line.left).toBeGreaterThanOrEqual(boxes.editor.right - 0.5); // not over the editor
+  });
+
+  test("bv-06 a connection that does not know its platform (WiFi) says so, and never names one", async ({ page }) => {
+    await page.route("**/__headless/call", async (route) => {
+      const body = route.request().postData() ?? "";
+      if (body.includes('"method":"ListDevices"')) return route.fulfill({ json: { result: [{ id: "emu-1", name: "Pixel Test", platform: "android", kind: "emulator", state: "device", booted: true }] } });
+      if (body.includes('"method":"DeviceListNote"')) return route.fulfill({ json: { result: "" } });
+      if (body.includes('"method":"Connect"')) return route.fulfill({ json: { result: { connected: true, deviceId: "192.0.2.7:48686", deviceName: "WiFi 192.0.2.7", platform: "" } } });
+      await route.continue();
+    });
+    await openStudio(page);
+    await page.click("#btn-refresh");
+    await page.locator("#device-picker").selectOption({ label: "Pixel Test  ·  android" });
+    await page.click("#btn-connect");
+    await expect(page.locator("#status-text")).toHaveText("WiFi 192.0.2.7  ·  platform unknown");
+    await expect(page.locator("#status-text")).not.toContainText(/ios|android/i);
+  });
+
+  test("bv-07 the device settings title shows no empty parentheses when the platform is unknown", async ({ page }) => {
+    let platform = "";
+    await page.route("**/__headless/call", async (route) => {
+      const body = route.request().postData() ?? "";
+      if (body.includes('"method":"GetDeviceSettings"')) return route.fulfill({ json: { result: { deviceName: "WiFi 192.0.2.7", platform, available: false, reason: "not addressable" } } });
+      await route.continue();
+    });
+    await openStudio(page);
+    await page.click("#btn-device-settings");
+    await expect(page.locator("#device-settings .ds-head")).toHaveText("WiFi 192.0.2.7");
+    await expect(page.locator("#device-settings")).not.toContainText("()");
+    platform = "android";
+    await page.click("#btn-device-settings");
+    await page.click("#btn-device-settings");
+    await expect(page.locator("#device-settings .ds-head")).toHaveText("WiFi 192.0.2.7 (android)");
+  });
 });

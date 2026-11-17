@@ -111,6 +111,16 @@ com.example.app`. It is the app's own statement, not a proof, and an agent that 
 of it. A `Text` builds a `RichText` inside it; the agent counts that pair once, so `see exactly 1 "<text>"` passes for one `Text`, an ordinal (`2nd "Row"`)
 counts separate texts, and a button's label is one match. Before the fix for issue #800 (`probe_agent` 0.27.0 and earlier), a plain `Text` counted twice: `see exactly 2` passed for one `Text`, and `2nd "8"` found the inner paragraph of a single "8"; with the fix both fail, and the real count and `tap "8"` are what to write.
 
+**The agent answers once the app's view has its real size.** After a relaunch, an app can draw its first frames with a 0×0 view for about a second (measured on an
+Android 15 emulator), and a list laid out then holds only its first item: a step that ran in that window saw half the screen (issue #793). The size changes the moment
+the engine reports it, but the widgets are laid out at it only in the next frame, so the agent records the size each frame was laid out at, and waits, before it
+answers any request, until a frame has been laid out at the view's real size. Once it has, this is a synchronous check that costs nothing; after a resize (a
+rotation) a request waits for at most one frame. The wait
+is capped at 2.5 seconds, well under the handshake's limits (the dial timeout is 5 seconds in Studio and 30 by default in the CLI); a size that does not come within
+the cap is not waited for again until the view's metrics change. It never waits for an app with no view, or one that is not in the foreground (paused, hidden,
+inactive). The `probe.ping` answer says how long it waited, in `view_ready_ms` (0 when it did not wait), and the agent reports the capability
+`waits_for_view_size`. Both are for diagnostics: no step needs them, and an older agent sends neither.
+
 Errors use JSON-RPC codes: `-32000` timeout, `-32001` widget not found, `-32002` assertion failed. A timeout or
 not-found error lists the texts and keys visible at that moment, which is usually enough to see why a selector missed. The value of an obscured (password) field is never matched by a selector and never listed there; the field is found by its id, label or hint (see Password fields in the ProbeScript syntax page).
 

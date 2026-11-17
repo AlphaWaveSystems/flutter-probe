@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -443,16 +445,30 @@ class _NavigationFamilyScreenState extends State<NavigationFamilyScreen> {
   }
 }
 
-/// Text and display, the text part (docs/compat/NEXT.md, item 1): a plain `Text`, a one-line `Text` that is cut with an ellipsis, a
-/// `Text.rich` of two spans ("Hello " and a bold "world") and a `RichText` of two spans ("Painted " and "rich text"). Nothing is tapped;
-/// the screen asks what `see` matches.
-class DisplayFamilyScreen extends StatelessWidget {
+/// Text and display (docs/compat/NEXT.md, items 1 and 3). The text part: a plain `Text`, a one-line `Text` that is cut with an ellipsis, a
+/// `Text.rich` of two spans ("Hello " and a bold "world") and a `RichText` of two spans ("Painted " and "rich text"). The part without
+/// text: an `Icon` with the semantic label "Favorite", an `Image` with the semantic label "Logo" (an inline PNG through `Image.memory`, so
+/// the fixture needs no asset), a `CircleAvatar` showing "AB", and a `FlutterLogo` inside a `GestureDetector` that counts taps. State
+/// text: `Taps: N` (the logo taps; no state text holds "Logo", "Favorite" or "AB", so a match on those comes from the widget).
+class DisplayFamilyScreen extends StatefulWidget {
   const DisplayFamilyScreen({super.key});
 
   /// The text of the ellipsis line: chosen to be longer than a phone screen is wide, so it is painted cut (an inference from its length on
   /// the two devices used; the agent does not report the painted width).
   static const longLine =
       'Shipping address: 1600 Amphitheatre Parkway, Mountain View, California, United States of America';
+
+  /// A 1×1 PNG, drawn at 48×48.
+  static final pixel = base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==',
+  );
+
+  @override
+  State<DisplayFamilyScreen> createState() => _DisplayFamilyScreenState();
+}
+
+class _DisplayFamilyScreenState extends State<DisplayFamilyScreen> {
+  int _logoTaps = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -465,7 +481,7 @@ class DisplayFamilyScreen extends StatelessWidget {
           _s(
             'wf_ellipsis',
             (k) => Text(
-              longLine,
+              DisplayFamilyScreen.longLine,
               key: k,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -497,6 +513,38 @@ class DisplayFamilyScreen extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _s(
+                'wf_icon',
+                (k) => Icon(Icons.favorite, key: k, semanticLabel: 'Favorite'),
+              ),
+              const SizedBox(width: 12),
+              _s(
+                'wf_image',
+                (k) => Image.memory(
+                  DisplayFamilyScreen.pixel,
+                  key: k,
+                  width: 48,
+                  height: 48,
+                  fit: BoxFit.fill,
+                  semanticLabel: 'Logo',
+                ),
+              ),
+              const SizedBox(width: 12),
+              _s(
+                'wf_avatar',
+                (k) => CircleAvatar(key: k, child: const Text('AB')),
+              ),
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: () => setState(() => _logoTaps++),
+                child: _s('wf_logo', (k) => FlutterLogo(key: k, size: 48)),
+              ),
+            ],
+          ),
+          _state('wf_logo_taps', 'Taps: $_logoTaps'),
         ],
       ),
     );

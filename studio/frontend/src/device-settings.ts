@@ -37,7 +37,7 @@ async function refresh(): Promise<void> {
     panel.appendChild(el("div", "ds-note", `Could not read the device: ${err}`));
     return;
   }
-  const head = el("div", "ds-head", info.deviceName ? `${info.deviceName} (${info.platform})` : "No device");
+  const head = el("div", "ds-head", info.deviceName ? (info.platform ? `${info.deviceName} (${info.platform})` : info.deviceName) : "No device");
   panel.appendChild(head);
   if (!info.available) {
     panel.appendChild(el("div", "ds-note", info.reason || "Not available."));

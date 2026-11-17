@@ -1,567 +1,255 @@
 ---
-// Read the released version from the repo's VERSION file at build time, so
-// the hero badge can never drift from the actual release again (it sat
-// hardcoded at v0.7.0 through five releases before this). Resolved from the
-// build cwd (website/) rather than import.meta.url, which points into the
-// prerender chunk at render time.
+// Read the released version from the repo's VERSION file at build time, so the hero badge can never drift from the actual release again
+// (it sat hardcoded at v0.7.0 through five releases before this). Resolved from the build cwd (website/) rather than import.meta.url,
+// which points into the prerender chunk at render time.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import Site from '../layouts/Site.astro';
+
 const version = readFileSync(resolve(process.cwd(), '../VERSION'), 'utf-8').trim();
+
+// Only facts that are true today: the free offer. No Offer for Team or Scale (they cannot be bought).
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'FlutterProbe',
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'Android, iOS',
+  description: 'Flutter E2E testing framework. Write tests in plain English using ProbeScript, execute via direct widget-tree access. Free to use: source-available CLI (BSL 1.1), MIT agent.',
+  url: 'https://flutterprobe.dev/',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  author: { '@type': 'Organization', name: 'Alpha Wave Systems', url: 'https://alphawavesystems.com' },
+};
+
+// The side-by-side listing, with its own colours for the two syntaxes.
+const probeLogin = `<span class="kw">test</span> <span class="str">"user can log in"</span>
+  open the app
+  tap <span class="str">"Sign In"</span>
+  type <span class="str">"user@test.com"</span> into <span class="str">"Email"</span>
+  type <span class="str">"secret"</span> into <span class="str">"Password"</span>
+  tap <span class="str">"Continue"</span>
+  see <span class="str">"Dashboard"</span>`;
+const dartLogin = `<span class="kw">testWidgets</span>(<span class="str">'user can log in'</span>, (t) <span class="kw">async</span> {
+  app.main();
+  <span class="kw">await</span> t.pumpAndSettle();
+  <span class="kw">await</span> t.tap(find.text(<span class="str">'Sign In'</span>));
+  <span class="kw">await</span> t.pumpAndSettle();
+  <span class="kw">await</span> t.enterText(
+    find.byType(TextField).first,
+    <span class="str">'user@test.com'</span>);
+  <span class="kw">await</span> t.enterText(
+    find.byType(TextField).last,
+    <span class="str">'secret'</span>);
+  <span class="kw">await</span> t.tap(find.text(<span class="str">'Continue'</span>));
+  <span class="kw">await</span> t.pumpAndSettle();
+  expect(find.text(<span class="str">'Dashboard'</span>),
+    findsOneWidget);
+});`;
 ---
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FlutterProbe — Flutter E2E Tests in Plain English</title>
-  <meta name="description" content="Flutter E2E testing framework. Write tests in plain English and run them through direct widget-tree access. Free to use: source-available CLI (BSL 1.1), MIT agent. Alternative to integration_test and Patrol." />
-  <meta name="keywords" content="flutter, e2e testing, flutter testing framework, integration_test alternative, patrol alternative, mobile testing, flutter ui testing, test automation, ProbeScript" />
-  <link rel="canonical" href="https://flutterprobe.dev/" />
-  <meta property="og:title" content="FlutterProbe — Flutter E2E Testing Framework" />
-  <meta property="og:description" content="Write Flutter E2E tests in plain English. Direct widget-tree access. Free to use: source-available CLI (BSL 1.1), MIT agent. Alternative to integration_test and Patrol." />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://flutterprobe.dev/" />
-  <meta property="og:image" content="https://flutterprobe.dev/og-image.png" />
-  <meta property="og:site_name" content="FlutterProbe" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="FlutterProbe — Flutter E2E Testing Framework" />
-  <meta name="twitter:description" content="Write Flutter E2E tests in plain English. Direct widget-tree access, no WebDriver layer." />
-  <meta name="twitter:image" content="https://flutterprobe.dev/og-image.png" />
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "FlutterProbe",
-    "applicationCategory": "DeveloperApplication",
-    "operatingSystem": "Android, iOS",
-    "description": "Flutter E2E testing framework. Write tests in plain English using ProbeScript, execute via direct widget-tree access. Free to use: source-available CLI (BSL 1.1), MIT agent.",
-    "url": "https://flutterprobe.dev/",
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-    "author": { "@type": "Organization", "name": "Alpha Wave Systems", "url": "https://alphawavesystems.com" }
-  }
-  </script>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <style is:inline>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    :root {
-      --bg: #06080d;
-      --bg2: #0c1018;
-      --bg3: #121826;
-      --border: #1e2940;
-      --border2: #2a3a58;
-      --text: #d8e0f0;
-      --muted: #7889a8;
-      --accent: #3bf0e4;
-      --green: #3bea7e;
-      --purple: #a78bfa;
-      --amber: #f5b731;
-      --coral: #ff6b6b;
-    }
-    body {
-      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
-      overflow-x: hidden;
-    }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { opacity: 0.85; }
-    /* ── Nav ── */
-    nav {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 1.25rem 2rem;
-      position: relative;
-      z-index: 10;
-    }
-    .nav-logo {
-      font-size: 1.2rem;
-      font-weight: 800;
-      color: var(--accent);
-      letter-spacing: -0.02em;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    .nav-logo svg { width: 28px; height: 28px; }
-    .nav-r { display: flex; gap: 1.5rem; align-items: center; }
-    .nav-r a { color: var(--muted); font-size: 0.9rem; font-weight: 500; transition: color 0.2s; }
-    .nav-r a:hover { color: var(--text); opacity: 1; }
-    .btn-sm {
-      padding: 0.45rem 1.1rem;
-      border-radius: 6px;
-      font-weight: 600;
-      font-size: 0.85rem;
-      background: var(--accent);
-      color: #06080d;
-      transition: transform 0.15s, box-shadow 0.15s;
-    }
-    .btn-sm:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 20px rgba(59, 240, 228, 0.25);
-      opacity: 1;
-    }
-    /* ── Hero ── */
-    .hero {
-      text-align: center;
-      padding: 7rem 2rem 5rem;
-      position: relative;
-      max-width: 960px;
-      margin: 0 auto;
-    }
-    .hero::before {
-      content: '';
-      position: absolute;
-      top: -100px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 800px;
-      height: 800px;
-      background: radial-gradient(circle, rgba(59, 240, 228, 0.04) 0%, transparent 65%);
-      pointer-events: none;
-    }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      padding: 0.35rem 0.9rem;
-      border: 1px solid var(--border2);
-      border-radius: 100px;
-      font-size: 0.78rem;
-      font-weight: 600;
-      color: var(--muted);
-      margin-bottom: 1.5rem;
-      background: var(--bg2);
-    }
-    .badge span {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: var(--green);
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-    .hero h1 {
-      font-size: clamp(2.4rem, 5.5vw, 4rem);
-      font-weight: 800;
-      line-height: 1.08;
-      letter-spacing: -0.03em;
-      margin-bottom: 1.5rem;
-    }
-    .hero h1 .g {
-      background: linear-gradient(135deg, var(--accent) 0%, #6ee7b7 50%, var(--accent) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .hero .sub {
-      font-size: 1.15rem;
-      color: var(--muted);
-      max-width: 560px;
-      margin: 0 auto 2.5rem;
-      line-height: 1.6;
-    }
-    /* ── Code block ── */
-    .hero-code {
-      position: relative;
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      max-width: 520px;
-      margin: 0 auto 2.5rem;
-      text-align: left;
-      overflow: hidden;
-    }
-    .hero-code .bar {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 0.6rem 1rem;
-      border-bottom: 1px solid var(--border);
-      background: var(--bg3);
-    }
-    .hero-code .dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--border2); }
-    .hero-code .fname {
-      margin-left: auto;
-      font-size: 0.72rem;
-      color: var(--muted);
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .hero-code pre {
-      padding: 1.25rem 1.5rem;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.85rem;
-      line-height: 1.85;
-      overflow-x: auto;
-    }
-    .kw { color: var(--purple); font-weight: 500; }
-    .str { color: var(--green); }
-    .cmd { color: var(--text); }
-    .cmt { color: var(--muted); font-style: italic; }
-    /* ── Buttons ── */
-    .cta { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; }
-    .btn-p {
-      padding: 0.7rem 1.6rem;
-      border-radius: 8px;
-      font-weight: 700;
-      font-size: 0.95rem;
-      background: var(--accent);
-      color: #06080d;
-      transition: all 0.2s;
-      border: none;
-      cursor: pointer;
-    }
-    .btn-p:hover { transform: translateY(-1px); box-shadow: 0 6px 30px rgba(59, 240, 228, 0.3); opacity: 1; }
-    .btn-s {
-      padding: 0.7rem 1.6rem;
-      border-radius: 8px;
-      font-weight: 600;
-      font-size: 0.95rem;
-      background: transparent;
-      color: var(--text);
-      border: 1px solid var(--border2);
-      transition: all 0.2s;
-      cursor: pointer;
-    }
-    .btn-s:hover { border-color: var(--accent); color: var(--accent); opacity: 1; }
-    /* ── Metrics ── */
-    .metrics { display: flex; justify-content: center; gap: 3rem; padding: 0 2rem 4rem; flex-wrap: wrap; }
-    .metric { text-align: center; }
-    .metric .num { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; }
-    .metric .num.t { color: var(--accent); }
-    .metric .num.g { color: var(--green); }
-    .metric .num.p { color: var(--purple); }
-    .metric .num.a { color: var(--amber); }
-    .metric .lbl { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
-    /* ── Sections ── */
-    section { max-width: 1200px; margin: 0 auto; padding: 5rem 2rem; }
-    .sec-h { text-align: center; margin-bottom: 3rem; }
-    .sec-h h2 { font-size: 1.8rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.6rem; }
-    .sec-h p { color: var(--muted); max-width: 520px; margin: 0 auto; font-size: 0.95rem; }
-    .divider { width: 100%; max-width: 1200px; margin: 0 auto; height: 1px; background: var(--border); }
-    /* ── Architecture ── */
-    .arch { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1.5rem; align-items: center; max-width: 800px; margin: 0 auto; }
-    .arch-box {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1.5rem;
-      text-align: center;
-    }
-    .arch-box h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.25rem; }
-    .arch-box p { font-size: 0.8rem; color: var(--muted); }
-    .arch-box .tag {
-      display: inline-block;
-      margin-top: 0.5rem;
-      padding: 0.2rem 0.6rem;
-      border-radius: 4px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .tag-go { background: rgba(59, 240, 228, 0.1); color: var(--accent); }
-    .tag-dart { background: rgba(59, 234, 126, 0.1); color: var(--green); }
-    .arch-arrow { color: var(--muted); font-size: 1.5rem; text-align: center; }
-    .arch-label { font-size: 0.7rem; color: var(--muted); display: block; font-family: 'JetBrains Mono', monospace; }
-    /* ── Features ── */
-    .features {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 1px;
-      background: var(--border);
-      border-radius: 12px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-    }
-    .feat { background: var(--bg2); padding: 1.75rem; }
-    .feat h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.5rem; }
-    .feat h3 .ic {
-      width: 20px; height: 20px;
-      border-radius: 5px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.7rem;
-      font-weight: 800;
-    }
-    .feat p { color: var(--muted); font-size: 0.85rem; line-height: 1.55; }
-    .ic-t { background: rgba(59, 240, 228, 0.12); color: var(--accent); }
-    .ic-g { background: rgba(59, 234, 126, 0.12); color: var(--green); }
-    .ic-p { background: rgba(167, 139, 250, 0.12); color: var(--purple); }
-    .ic-a { background: rgba(245, 183, 49, 0.12); color: var(--amber); }
-    .ic-c { background: rgba(255, 107, 107, 0.12); color: var(--coral); }
-    /* ── Comparison ── */
-    .compare {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      overflow: hidden;
-      max-width: 900px;
-      margin: 0 auto;
-    }
-    .compare-col { background: var(--bg2); }
-    .compare-col:first-child { border-right: 1px solid var(--border); }
-    .compare-hd {
-      padding: 0.75rem 1.25rem;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .compare-hd span:first-child { font-size: 0.85rem; font-weight: 700; }
-    .compare-hd .lines { font-size: 0.72rem; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
-    .compare-code {
-      padding: 1.25rem 1.5rem;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.8rem;
-      line-height: 1.8;
-      white-space: pre;
-      overflow-x: auto;
-      min-height: 220px;
-    }
-    /* ── Migration ── */
-    .migrate { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; max-width: 700px; margin: 0 auto; }
-    .migrate-tag {
-      padding: 0.55rem 1.1rem;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      background: var(--bg2);
-      transition: all 0.2s;
-      cursor: default;
-    }
-    .migrate-tag:hover { border-color: var(--accent); color: var(--accent); }
-    /* ── Steps ── */
-    .steps-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; max-width: 900px; margin: 0 auto; }
-    .st {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1.25rem;
-    }
-    .st .n { font-size: 0.7rem; font-weight: 800; color: var(--accent); margin-bottom: 0.5rem; font-family: 'JetBrains Mono', monospace; }
-    .st h3 { font-size: 0.9rem; font-weight: 700; margin-bottom: 0.3rem; }
-    .st p { color: var(--muted); font-size: 0.8rem; }
-    .st code {
-      display: block;
-      margin-top: 0.4rem;
-      padding: 0.25rem 0.5rem;
-      background: var(--bg3);
-      border-radius: 4px;
-      font-size: 0.72rem;
-      font-family: 'JetBrains Mono', monospace;
-      color: var(--accent);
-      word-break: break-all;
-    }
-    /* ── FAQ ── */
-    .faq { max-width: 720px; margin: 0 auto; }
-    .faq details { border-bottom: 1px solid var(--border); padding: 1rem 0; }
-    .faq summary { cursor: pointer; font-weight: 600; font-size: 1.05rem; color: var(--fg); list-style: none; }
-    .faq summary::before { content: '+ '; color: var(--accent); margin-right: 0.5rem; }
-    .faq details[open] summary::before { content: '− '; }
-    .faq p { margin: 0.75rem 0 0; color: var(--muted); line-height: 1.6; }
-    .faq code { background: var(--bg2); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.9rem; }
-    /* ── Install CTA ── */
-    .install { max-width: 600px; margin: 0 auto; text-align: center; }
-    .install-box {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1rem 1.5rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 1.5rem;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.9rem;
-    }
-    .install-box .dollar { color: var(--muted); margin-right: 0.5rem; }
-    .install-box button {
-      background: transparent;
-      border: 1px solid var(--border2);
-      color: var(--muted);
-      padding: 0.3rem 0.7rem;
-      border-radius: 5px;
-      font-size: 0.75rem;
-      cursor: pointer;
-      font-family: 'JetBrains Mono', monospace;
-      transition: all 0.2s;
-    }
-    .install-box button:hover { border-color: var(--accent); color: var(--accent); }
-    /* ── Footer ── */
-    footer {
-      border-top: 1px solid var(--border);
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 2.5rem 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      color: var(--muted);
-      font-size: 0.85rem;
-      flex-wrap: wrap;
-      gap: 1rem;
-    }
-    .foot-links { display: flex; gap: 1.5rem; }
-    .foot-links a { color: var(--muted); font-size: 0.85rem; }
-    .foot-links a:hover { color: var(--text); }
-    /* ── Responsive ── */
-    @media (max-width: 768px) {
-      .nav-r a:not(.btn-sm) { display: none; }
-      .arch { grid-template-columns: 1fr; gap: 1rem; }
-      .arch-arrow { transform: rotate(90deg); }
-      .compare { grid-template-columns: 1fr; }
-      .steps-row { grid-template-columns: 1fr 1fr; }
-      .hero h1 { font-size: 2.2rem; }
-    }
-    @media (max-width: 480px) {
-      .steps-row { grid-template-columns: 1fr; }
-      .metrics { gap: 1.5rem; }
-    }
-  </style>
-</head>
-<body>
-  <!-- Nav -->
-  <nav>
-    <a href="/" class="nav-logo">
-      <svg viewBox="0 0 28 28" width="28" height="28" fill="none"><rect x="2" y="2" width="24" height="24" rx="6" stroke="#3bf0e4" stroke-width="2"/><path d="M9 14l3 3 7-7" stroke="#3bf0e4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      FlutterProbe
-    </a>
-    <div class="nav-r">
-      <a href="/getting-started/installation/">Docs</a>
-      <a href="/probescript/syntax/">ProbeScript</a>
-      <a href="/tools/cli-reference/">CLI</a>
-      <a href="/tutorials/flutter-login-test/">Tutorials</a>
-      <a href="/pricing/">Pricing</a>
-      <a href="https://github.com/AlphaWaveSystems/flutter-probe/wiki">Wiki</a>
-      <a href="https://github.com/AlphaWaveSystems/flutter-probe">GitHub</a>
-      <a href="/getting-started/quick-start/" class="btn-sm">Quick Start</a>
-    </div>
-  </nav>
+<Site
+  title="FlutterProbe — Flutter E2E Tests in Plain English"
+  description="Flutter E2E testing framework. Write tests in plain English and run them through direct widget-tree access. Free to use: source-available CLI (BSL 1.1), MIT agent. Probe Cloud, hosted test history, is a design-partner preview."
+  path="/"
+  jsonLd={jsonLd}
+>
   <!-- Hero -->
   <div class="hero">
-    <div class="badge"><span></span> v{version} &middot; free to use &middot; source-available CLI (BSL 1.1), MIT agent</div>
-    <h1>Flutter E2E tests in<br/><span class="g">plain English</span></h1>
-    <p class="sub">Write tests your whole team can read. Execute with direct widget-tree access &mdash; no accessibility layer, no WebDriver overhead.</p>
-    <div class="hero-code">
-      <div class="bar"><div class="dot"></div><div class="dot"></div><div class="dot"></div><span class="fname">login.probe</span></div>
-      <pre><span class="kw">test</span> <span class="str">"user can log in"</span>
-  <span class="cmd">open the app</span>
-  <span class="cmd">tap</span> <span class="str">"Sign In"</span>
-  <span class="cmd">type</span> <span class="str">"user@test.com"</span> <span class="cmd">into</span> <span class="str">"Email"</span>
-  <span class="cmd">type</span> <span class="str">"secret"</span> <span class="cmd">into</span> <span class="str">"Password"</span>
-  <span class="cmd">tap</span> <span class="str">"Continue"</span>
-  <span class="cmd">see</span> <span class="str">"Dashboard"</span>         <span class="cmt">{'<!-- 7 lines. Done. -->'}</span></pre>
+    <div class="badge"><i></i> v{version} &middot; free to use &middot; source-available CLI (BSL 1.1), MIT agent</div>
+    <h1>Flutter end-to-end tests in <span class="g">plain English</span></h1>
+    <p class="sub">Write what a user does. FlutterProbe runs it on your emulator, simulator or phone, through direct access to the widget tree, and shows what broke and why.</p>
+    <div class="cta center">
+      <a href="/getting-started/installation/" class="btn-p">Install free</a>
+      <a href="https://github.com/AlphaWaveSystems/flutter-probe/issues/new?template=design-partner.yml" class="btn-s">Apply as a design partner</a>
     </div>
-    <div class="cta">
-      <a href="/getting-started/installation/" class="btn-p">Get Started</a>
-      <a href="/getting-started/quick-start/" class="btn-s">Quick Start Guide</a>
-    </div>
+    <div class="cmd-line" tabindex="0" role="region" aria-label="Install command"><span>$</span> <b>brew install AlphaWaveSystems/tap/probe</b></div>
   </div>
-  <!-- Metrics -->
+
   <div class="metrics">
-    <div class="metric"><div class="num t">~2x</div><div class="lbl"><a href="/blog/flutterprobe-vs-maestro-benchmark/">Faster median suite time than Maestro</a> (one app, 20 runs)</div></div>
-    <div class="metric"><div class="num g">0 of 20</div><div class="lbl">Flaky FlutterProbe runs in that benchmark</div></div>
-    <div class="metric"><div class="num p">3</div><div class="lbl">Device kinds: emulators, simulators, physical</div></div>
-    <div class="metric"><div class="num a">7</div><div class="lbl">Migration formats</div></div>
+    <div class="metric"><div class="num n-t">~2x</div><div class="lbl"><a href="/blog/flutterprobe-vs-maestro-benchmark/">Faster median suite time than Maestro</a> (one app, 20 runs; method in the post)</div></div>
+    <div class="metric"><div class="num n-g">0 of 20</div><div class="lbl">Flaky FlutterProbe runs in that benchmark</div></div>
+    <div class="metric"><div class="num n-p">3</div><div class="lbl">Device kinds: emulators, simulators, physical</div></div>
+    <div class="metric"><div class="num n-a">7</div><div class="lbl">Migration formats</div></div>
   </div>
   <div class="divider"></div>
-  <!-- Architecture -->
-  <section>
-    <div class="sec-h"><h2>Architecture</h2><p>Two components. One WebSocket. Zero flakiness.</p></div>
-    <div class="arch">
-      <div class="arch-box">
-        <h3>probe CLI</h3>
-        <p>Parses .probe files, manages devices, dispatches commands, generates reports</p>
-        <span class="tag tag-go">Go &middot; 15MB binary</span>
+
+  <!-- Proof: a real test beside a real report -->
+  <section class="sec" aria-labelledby="proof-h">
+    <div class="sec-h"><h2 id="proof-h">A real test next to its real report</h2><p>Excerpts from real runs of the repository's own fixture app on an Android emulator.</p></div>
+    <div class="split">
+      <div class="codebox">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="fname">webview.probe</span></div>
+<pre tabindex="0" role="region" aria-label="The test, in ProbeScript"><span class="kw">test</span> <span class="str">"type into a field, tap a button, wait for the result"</span>
+  wait until <span class="str">"Page loaded"</span> appears
+  type <span class="str">"hello"</span> into css:<span class="str">"#message"</span> in webview
+  store text of css:<span class="str">"#message"</span> in webview as typed
+  type <span class="str">"&lt;typed&gt;"</span> into #echo_input
+  see <span class="str">"Echo: hello"</span>
+  tap <span class="str">"Contact support"</span> in webview
+  wait until <span class="str">"Message sent"</span> appears in webview
+  see css:<span class="str">"#result"</span> in webview</pre>
       </div>
-      <div class="arch-arrow">
-        <span style="font-size:2rem">&#8652;</span>
-        <span class="arch-label">JSON-RPC 2.0</span>
-        <span class="arch-label">WebSocket :48686</span>
+      <div class="codebox">
+        <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="fname">probe test</span></div>
+<pre tabindex="0" role="region" aria-label="The report of the run"><span class="ok">✓</span>  the page is shown and its title is found (2.808s)
+<span class="ok">✓</span>  type into a field, tap a button, wait for the result (3.569s)
+<span class="ok">✓</span>  the result text is read, not only found (3.864s)
+<span class="ok">✓</span>  stored text has its runs of spaces collapsed, and can be typed into a Flutter field (4.709s)
+<span class="ok">✓</span>  stored text drops the characters that show nothing (4.323s)
+<span class="ok">✓</span>  a Flutter button reloads the page and the page starts again (4.232s)
+
+6 passed  (23.505s)
+
+<span class="bad">✗</span>  a title the page does not have
+     line 15: see "Getting Stopped" in webview: No element in the
+     WebView page "Fixture page" matches "Getting Stopped"</pre>
       </div>
-      <div class="arch-box">
-        <h3>ProbeAgent</h3>
-        <p>Runs inside your app. Walks widget tree, executes actions, captures screenshots</p>
-        <span class="tag tag-dart">Dart &middot; dev dependency</span>
+    </div>
+    <p class="note">The left listing is a whole test of the file, and the six passing lines are one run of that file: <a href="https://github.com/AlphaWaveSystems/flutter-probe/blob/main/native-test-apps/flutter-webview/probe-tests/webview.probe">webview.probe</a> (Flutter 3.44.8, emulator, Android 15). The failing block is not part of that run: it is a test written to fail, from a separate run of a variant file of the same app (<a href="https://github.com/AlphaWaveSystems/flutter-probe/blob/main/native-test-apps/flutter-webview/probe-tests/negative/webview.probe.expect-fail">webview.probe.expect-fail</a>), to show the message you get when a step cannot find what it looks for; one repeated prefix is trimmed from that message. The WebView steps are Android only; every other step works on iOS too.</p>
+  </section>
+  <div class="divider"></div>
+
+  <!-- Three doors -->
+  <section class="sec" id="doors" aria-labelledby="doors-h">
+    <div class="sec-h"><h2 id="doors-h">Three ways in</h2><p>Only the first one needs nothing from us. Say which one fits, and here is what happens next.</p></div>
+    <div class="cards">
+      <div class="card">
+        <span class="pill live">Available now</span>
+        <h3>Free</h3>
+        <p>Install the CLI, add the agent to your app and run tests on your own devices in about ten minutes.</p>
+        <ul><li>No account, no sign-up.</li><li>Unlimited local runs, unlimited seats.</li></ul>
+        <div class="cta"><a href="/getting-started/installation/" class="btn-p">Install free</a></div>
+      </div>
+      <div class="card">
+        <span class="pill live">Open now, by hand</span>
+        <h3>Design partner</h3>
+        <p>For the first 10 Flutter teams who want Probe Cloud and will tell us what is missing. Free during the beta, 50% off for life on any paid plan when paid plans launch. The beta may change or end.</p>
+        <ul><li>You send an application: a GitHub issue form (public) or an email.</li><li>We answer by hand and tell you what access you get and when.</li></ul>
+        <div class="cta"><a href="https://github.com/AlphaWaveSystems/flutter-probe/issues/new?template=design-partner.yml" class="btn-p">Apply as a design partner</a></div>
+      </div>
+      <div class="card">
+        <span class="pill planned">Planned, by invitation</span>
+        <h3>Team or Scale</h3>
+        <p>Paid plans for teams that want the shared history. There is no checkout yet and nothing to buy today.</p>
+        <ul><li>Design partners get 50% off for life when paid plans launch.</li><li>Prices and allowances are planned, not final.</li></ul>
+        <div class="cta"><a href="/pricing/" class="btn-s">See the plans</a></div>
       </div>
     </div>
   </section>
   <div class="divider"></div>
-  <!-- Features -->
-  <section>
-    <div class="sec-h"><h2>Everything you need</h2><p>No plugins to install. No extra packages. Batteries included.</p></div>
+
+  <!-- Probe Cloud -->
+  <section class="sec" id="probe-cloud" aria-labelledby="cloud-h">
+    <div class="sec-h"><h2 id="cloud-h">Probe Cloud: your test history, shared with the team</h2><p>A design-partner preview. The free CLI never needs it.</p></div>
     <div class="features">
-      <div class="feat"><h3><span class="ic ic-t">N</span> Natural language</h3><p>ProbeScript reads like English. No locators, no async/await. QA, product, and engineering can all read the tests.</p></div>
-      <div class="feat"><h3><span class="ic ic-g">&#9889;</span> Direct widget-tree access</h3><p>The Dart agent in your app reads the live widget tree. No XPath, no accessibility bridge, and widget keys work as selectors.</p></div>
-      <div class="feat"><h3><span class="ic ic-p">&#8635;</span> Watch mode</h3><p>Re-runs on file save with hot-reload awareness. No recompilation of the test between runs.</p></div>
-      <div class="feat"><h3><span class="ic ic-a">&#8853;</span> Cross-platform</h3><p>Same tests on Android emulators, iOS simulators, and physical devices. WiFi mode for physical iOS devices. Permissions, lifecycle, and platform quirks handled automatically.</p></div>
-      <div class="feat"><h3><span class="ic ic-c">&#9673;</span> Test recording</h3><p>Record taps, swipes, and text input on a real device. FlutterProbe writes the .probe file as you interact. <code>probe test --record</code> also keeps a step-by-step recording of each test: screenshots, widget trees and the app's Dart HTTP calls, viewable offline.</p></div>
-      <div class="feat"><h3><span class="ic ic-t">&#9651;</span> Visual regression</h3><p>Screenshot baselines with configurable pixel thresholds — full screen or cropped to a single widget. Catch unintended UI changes before they ship.</p></div>
-      <div class="feat"><h3><span class="ic ic-g">&#11041;</span> HTTP mocking</h3><p>Mock API responses directly in test files. No external packages, no separate mock server.</p></div>
-      <div class="feat"><h3><span class="ic ic-c">&#10024;</span> AI assertions, local-first</h3><p>see "checkout looks correct" with ai — against your own OpenAI/Anthropic key or a fully local model. Screenshot redaction built in; nothing routes through our servers.</p></div>
-      <div class="feat"><h3><span class="ic ic-a">&#9724;</span> Native UI automation</h3><p>Drive pickers and share sheets outside the Flutter tree with tap native and see native. Android via uiautomator — no extra dependencies.</p></div>
-      <div class="feat"><h3><span class="ic ic-p">&#9044;</span> CI/CD ready</h3><p>JUnit XML, JSON, HTML reports. Official Docker image. GitHub Actions workflow included. Test sharding with --shard N.</p></div>
+      <div class="feat"><h3>Trend</h3><p>The pass rate for each day, so a slow slide shows before a release.</p></div>
+      <div class="feat"><h3>Failing tests</h3><p>Tests that failed, newest failure first, with the file they live in.</p></div>
+      <div class="feat"><h3>Unstable tests</h3><p>Tests that passed and also failed or needed a retry, with how often.</p></div>
+      <div class="feat"><h3>Pull requests</h3><p>The newest commit of each pull request, compared with the base branch.</p></div>
     </div>
+    <div class="cta center" style="margin-top:2rem">
+      <a href="/demo/" class="btn-s">Open the sample dashboard (made-up data)</a>
+      <a href="/probe-cloud/" class="btn-s">What exists today</a>
+    </div>
+    <p class="note" style="text-align:center;margin-inline:auto">The hosted service is not live yet. Uploads are built for GitHub Actions; for any other CI, the JUnit and JSON reports work as before.</p>
   </section>
   <div class="divider"></div>
-  <!-- Comparison -->
-  <section>
-    <div class="sec-h"><h2>Side by side</h2><p>Same login test. Different experience.</p></div>
-    <div class="compare">
-      <div class="compare-col">
-        <div class="compare-hd"><span>FlutterProbe</span><span class="lines">7 lines</span></div>
-        <div class="compare-code"><span style="color:#a78bfa">test</span> <span style="color:#3bea7e">"user can log in"</span>
-  open the app
-  tap <span style="color:#3bea7e">"Sign In"</span>
-  type <span style="color:#3bea7e">"user@test.com"</span> into <span style="color:#3bea7e">"Email"</span>
-  type <span style="color:#3bea7e">"secret"</span> into <span style="color:#3bea7e">"Password"</span>
-  tap <span style="color:#3bea7e">"Continue"</span>
-  see <span style="color:#3bea7e">"Dashboard"</span></div>
-      </div>
-      <div class="compare-col">
-        <div class="compare-hd"><span>flutter_test</span><span class="lines">13 lines</span></div>
-        <div class="compare-code"><span style="color:#a78bfa">testWidgets</span>(<span style="color:#3bea7e">'user can log in'</span>, (t) <span style="color:#a78bfa">async</span> {'{'}<br/>  app.main();<br/>  <span style="color:#a78bfa">await</span> t.pumpAndSettle();<br/>  <span style="color:#a78bfa">await</span> t.tap(find.text(<span style="color:#3bea7e">'Sign In'</span>));<br/>  <span style="color:#a78bfa">await</span> t.pumpAndSettle();<br/>  <span style="color:#a78bfa">await</span> t.enterText(<br/>    find.byType(TextField).first,<br/>    <span style="color:#3bea7e">'user@test.com'</span>);<br/>  <span style="color:#a78bfa">await</span> t.enterText(<br/>    find.byType(TextField).last,<br/>    <span style="color:#3bea7e">'secret'</span>);<br/>  <span style="color:#a78bfa">await</span> t.tap(find.text(<span style="color:#3bea7e">'Continue'</span>));<br/>  <span style="color:#a78bfa">await</span> t.pumpAndSettle();<br/>  expect(find.text(<span style="color:#3bea7e">'Dashboard'</span>),<br/>    findsOneWidget);<br/>{'}'});</div>
-      </div>
+
+  <!-- Pricing summary -->
+  <section class="sec" aria-labelledby="price-h">
+    <div class="sec-h"><h2 id="price-h">Plans</h2><p>The CLI and agent are free. The paid plans are planned and by invitation: nothing can be bought yet.</p></div>
+    <div class="plans">
+      <div class="plan"><span class="pill live">Available now</span><h3>Free</h3><div class="price">$0</div><p class="desc">Local runs, unlimited seats. 1,000 results a month in Probe Cloud (preview).</p></div>
+      <div class="plan planned"><span class="pill planned">Planned, by invitation</span><h3>Team</h3><div class="price">$49 <small>/ month</small></div><p class="desc">Unlimited seats, no overage. 100,000 results a month.</p></div>
+      <div class="plan planned"><span class="pill planned">Planned, by invitation</span><h3>Scale</h3><div class="price">$149 <small>/ month</small></div><p class="desc">Unlimited seats, no overage. 500,000 results a month.</p></div>
     </div>
+    <p class="note" style="text-align:center;margin-inline:auto">Planned prices in US dollars, not offers, and not final. A pay-what-you-use account is planned too. <a href="/pricing/">All details on the pricing page</a>.</p>
   </section>
   <div class="divider"></div>
-  <!-- Migration -->
-  <section>
-    <div class="sec-h"><h2>Migrate from anything</h2><p>probe-convert handles 7 source formats. 100% construct coverage.</p></div>
-    <div class="migrate">
-      <div class="migrate-tag">Maestro</div>
-      <div class="migrate-tag">Gherkin</div>
-      <div class="migrate-tag">Robot Framework</div>
-      <div class="migrate-tag">Detox</div>
-      <div class="migrate-tag">Appium Python</div>
-      <div class="migrate-tag">Appium Java</div>
-      <div class="migrate-tag">Appium JS</div>
-    </div>
-  </section>
-  <div class="divider"></div>
-  <!-- Getting Started -->
-  <section>
-    <div class="sec-h"><h2>Zero to tests in 4 steps</h2></div>
+
+  <!-- How you start -->
+  <section class="sec" aria-labelledby="start-h">
+    <div class="sec-h"><h2 id="start-h">Three steps, with the exact commands</h2></div>
     <div class="steps-row">
-      <div class="st"><div class="n">01</div><h3>Install</h3><p>Single binary. No runtime deps.</p><code>brew install AlphaWaveSystems/tap/probe</code></div>
-      <div class="st"><div class="n">02</div><h3>Init</h3><p>Scaffolds config and test directory.</p><code>probe init</code></div>
-      <div class="st"><div class="n">03</div><h3>Write</h3><p>Plain English in a .probe file.</p><code>tests/login.probe</code></div>
-      <div class="st"><div class="n">04</div><h3>Run</h3><p>Against any connected device.</p><code>probe test tests/ -v</code></div>
+      <div class="st"><div class="n">01</div><h3>Install</h3><p>One binary, no runtime dependencies. Then add <code>flutter_probe_agent</code> to your app as a dev dependency.</p><code>brew install AlphaWaveSystems/tap/probe</code></div>
+      <div class="st"><div class="n">02</div><h3>Write and run</h3><p>Scaffold with <code>probe init</code>, write plain English in a .probe file, run it on a connected device.</p><code>probe test tests/ -v</code></div>
+      <div class="st"><div class="n">03</div><h3>See what a report holds</h3><p>Works today and sends nothing: it prints exactly what Probe Cloud would receive. Design partners get access to send it.</p><code>probe test tests/ --upload-dry-run</code></div>
     </div>
   </section>
   <div class="divider"></div>
+
+  <!-- What it does -->
+  <section class="sec" aria-labelledby="feat-h">
+    <div class="sec-h"><h2 id="feat-h">Everything you need</h2><p>No plugins to install. No extra packages. Batteries included.</p></div>
+    <div class="features">
+      <div class="feat"><h3>Natural language</h3><p>ProbeScript reads like English. No locators, no async/await. QA, product, and engineering can all read the tests.</p></div>
+      <div class="feat"><h3>Direct widget-tree access</h3><p>The Dart agent in your app reads the live widget tree. No XPath, no accessibility bridge, and widget keys work as selectors.</p></div>
+      <div class="feat"><h3>Watch mode</h3><p>Re-runs on file save with hot-reload awareness. No recompilation of the test between runs.</p></div>
+      <div class="feat"><h3>Cross-platform</h3><p>Same tests on Android emulators, iOS simulators, and physical devices. WiFi mode for physical iOS devices. Permissions, lifecycle, and platform quirks handled automatically.</p></div>
+      <div class="feat"><h3>Test recording</h3><p>Record taps, swipes, and text input on a real device. FlutterProbe writes the .probe file as you interact. <code>probe test --record</code> also keeps a step-by-step recording of each test: screenshots, widget trees and the app's Dart HTTP calls, viewable offline.</p></div>
+      <div class="feat"><h3>Visual regression</h3><p>Screenshot baselines with configurable pixel thresholds — full screen or cropped to a single widget. Catch unintended UI changes before they ship.</p></div>
+      <div class="feat"><h3>HTTP mocking</h3><p>Mock API responses directly in test files. No external packages, no separate mock server.</p></div>
+      <div class="feat"><h3>AI assertions, local-first</h3><p>see "checkout looks correct" with ai — against your own OpenAI/Anthropic key or a fully local model. Screenshot redaction built in; nothing routes through our servers.</p></div>
+      <div class="feat"><h3>Native UI automation</h3><p>Drive pickers and share sheets outside the Flutter tree with tap native and see native. Android via uiautomator — no extra dependencies.</p></div>
+      <div class="feat"><h3>CI/CD ready</h3><p>JUnit XML, JSON, HTML reports. Official Docker image. GitHub Actions workflow included. Test sharding with --shard N.</p></div>
+    </div>
+  </section>
+  <div class="divider"></div>
+
+  <section class="sec" aria-labelledby="side-h">
+    <div class="sec-h"><h2 id="side-h">Side by side</h2><p>Same login test. Different experience.</p></div>
+    <div class="compare">
+      <div><div class="compare-hd"><span>FlutterProbe</span><span class="lines">7 lines</span></div><pre tabindex="0" role="region" aria-label="FlutterProbe login test" set:html={probeLogin}></pre></div>
+      <div><div class="compare-hd"><span>flutter_test</span><span class="lines">13 lines</span></div><pre tabindex="0" role="region" aria-label="flutter_test login test" set:html={dartLogin}></pre></div>
+    </div>
+  </section>
+  <div class="divider"></div>
+
+  <section class="sec" aria-labelledby="arch-h">
+    <div class="sec-h"><h2 id="arch-h">Architecture</h2><p>Two components. One WebSocket.</p></div>
+    <div class="arch">
+      <div class="arch-box"><h3>probe CLI</h3><p>Parses .probe files, manages devices, dispatches commands, generates reports</p><span class="tag">Go &middot; one binary</span></div>
+      <div class="arch-arrow"><span style="font-size:2rem">&#8652;</span><span>JSON-RPC 2.0</span><span>WebSocket :48686</span></div>
+      <div class="arch-box"><h3>ProbeAgent</h3><p>Runs inside your app. Walks widget tree, executes actions, captures screenshots</p><span class="tag">Dart &middot; dev dependency</span></div>
+    </div>
+  </section>
+  <div class="divider"></div>
+
+  <section class="sec" aria-labelledby="mig-h">
+    <div class="sec-h"><h2 id="mig-h">Migrate from anything</h2><p>probe-convert handles 7 source formats.</p></div>
+    <div class="migrate"><span>Maestro</span><span>Gherkin</span><span>Robot Framework</span><span>Detox</span><span>Appium Python</span><span>Appium Java</span><span>Appium JS</span></div>
+  </section>
+  <div class="divider"></div>
+
   <!-- FAQ -->
-  <section>
-    <div class="sec-h"><h2>FAQ</h2></div>
+  <section class="sec" id="faq" aria-labelledby="faq-h">
+    <div class="sec-h"><h2 id="faq-h">Questions</h2></div>
     <div class="faq">
+      <h3>Probe Cloud and plans</h3>
+      <details>
+        <summary>What happens to my data?</summary>
+        <p>Nothing leaves your machine unless you upload. When you do, the payload is scrubbed first: paths are made relative, secret-looking values are redacted, and screenshots and device identifiers are left out. Uploads are capped at 1 MiB and 5,000 results, and <code>--upload-dry-run</code> prints exactly what would be sent. Details: <a href="/probe-cloud/">Probe Cloud</a> and the <a href="/privacy/">privacy policy</a> (a draft for review).</p>
+      </details>
+      <details>
+        <summary>Can I cancel, and what about refunds?</summary>
+        <p>Nothing can be bought yet. The rules for paid plans are in the <a href="/terms/">terms</a> and the <a href="/refunds/">refund policy</a>; both are drafts for review and not final.</p>
+      </details>
+      <details>
+        <summary>My CI is not GitHub Actions. Can I still use FlutterProbe?</summary>
+        <p>Yes. The CLI runs on any CI system and writes JUnit XML, JSON and HTML reports with no account. Uploads to Probe Cloud are built for GitHub Actions only for now.</p>
+      </details>
+      <details>
+        <summary>What is a design partner?</summary>
+        <p>One of the first 10 Flutter teams to try Probe Cloud and tell us what is missing. It is free during the beta, and when paid plans launch you get 50% off for life on any paid plan, in exchange for honest feedback and a short call or written notes after using it on a real project. The beta may change or end. <a href="https://github.com/AlphaWaveSystems/flutter-probe/issues/new?template=design-partner.yml">Apply as a design partner</a> with the GitHub form (public) or <a href="mailto:support@alphawavesystems.com">by email</a>.</p>
+      </details>
+      <h3>Using FlutterProbe</h3>
+      <details>
+        <summary>Do I need to modify my Flutter app?</summary>
+        <p>Add <code>flutter_probe_agent</code> as a dev dependency and call <code>ProbeAgent.start()</code> in your main entrypoint, guarded by <code>--dart-define=PROBE_AGENT=true</code>. No other changes needed. The agent is stripped from release builds.</p>
+      </details>
+      <details>
+        <summary>Can I run tests in CI/CD?</summary>
+        <p>Yes. FlutterProbe includes GitHub Actions workflows for Android (ubuntu + emulator) and iOS (macOS + simulator) with 3-way test sharding, automated app build, and HTML report generation. Use <code>--format junit -o results.xml</code> for CI integration.</p>
+      </details>
       <details>
         <summary>Can I test on physical iOS devices?</summary>
         <p>Yes. FlutterProbe supports physical iOS devices via USB or WiFi. <strong>WiFi is recommended</strong> &mdash; it provides a stable, drop-free connection. USB-C cables can cause intermittent disconnects due to charge/data mode switching. Build with <code>--dart-define=PROBE_WIFI=true</code> and connect with <code>--host &lt;device-ip&gt;</code>.</p>
@@ -578,58 +266,35 @@ const version = readFileSync(resolve(process.cwd(), '../VERSION'), 'utf-8').trim
         <summary>What operations are unsupported on physical devices?</summary>
         <p><code>clear app data</code>, <code>allow/deny permission</code>, and <code>set location</code> are skipped with a warning on physical iOS devices (no simulator sandbox access). On Android physical devices, only <code>set location</code> is unsupported. All other operations work normally.</p>
       </details>
-      <details>
-        <summary>Do I need to modify my Flutter app?</summary>
-        <p>Add <code>flutter_probe_agent</code> as a dev dependency and call <code>ProbeAgent.start()</code> in your main entrypoint, guarded by <code>--dart-define=PROBE_AGENT=true</code>. No other changes needed. The agent is stripped from release builds.</p>
-      </details>
-      <details>
-        <summary>Can I run tests in CI/CD?</summary>
-        <p>Yes. FlutterProbe includes GitHub Actions workflows for Android (ubuntu + emulator) and iOS (macOS + simulator) with 3-way test sharding, automated app build, and HTML report generation. Use <code>--format junit -o results.xml</code> for CI integration.</p>
-      </details>
     </div>
   </section>
   <div class="divider"></div>
-  <!-- Design partners -->
-  <section>
+
+  <!-- Install -->
+  <section class="sec" aria-labelledby="try-h">
     <div class="install">
-      <div class="sec-h"><h2>Probe Cloud design partners</h2><p>Probe Cloud, hosted test reports, is a preview and the service is not live yet. The first 10 teams try it free during the beta and get 50% off for life when paid plans launch, in exchange for feedback. The CLI stays free.</p></div>
-      <div class="cta">
-        <a href="/pricing/#design-partners" class="btn-p">See the offer</a>
-        <a href="/demo/" class="btn-s">Sample dashboard (made-up data)</a>
-      </div>
-    </div>
-  </section>
-  <div class="divider"></div>
-  <!-- Install CTA -->
-  <section>
-    <div class="install">
-      <div class="sec-h"><h2>Try it now</h2></div>
+      <div class="sec-h" style="margin-bottom:0"><h2 id="try-h">Try it now</h2></div>
       <div class="install-box">
-        <span><span class="dollar">$</span> brew install AlphaWaveSystems/tap/probe</span>
-        <button onclick="navigator.clipboard.writeText('brew tap AlphaWaveSystems/tap && brew install probe');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
+        <span tabindex="0" role="region" aria-label="Install command, to copy"><span style="color:var(--muted);margin-right:0.5rem">$</span>brew install AlphaWaveSystems/tap/probe</span>
+        <button type="button" id="copy-install" aria-label="Copy the install command">Copy</button>
       </div>
-      <p style="color:var(--muted);font-size:0.85rem;margin:0.75rem 0 0">Free to use for any purpose, including production, except offering a competing hosted testing service (the CLI is under BSL 1.1; the Dart agent is MIT).</p>
-      <div class="cta">
+      <p>Free to use for any purpose, including production, except offering a competing hosted testing service (the CLI is under BSL 1.1; the Dart agent is MIT).</p>
+      <div class="cta center">
         <a href="/getting-started/installation/" class="btn-p">Read the docs</a>
         <a href="/tutorials/flutter-login-test/" class="btn-s">Write your first test</a>
-        <a href="https://github.com/AlphaWaveSystems/flutter-probe" class="btn-s">Star on GitHub</a>
+        <a href="https://github.com/AlphaWaveSystems/flutter-probe/issues/new?template=design-partner.yml" class="btn-s">Apply as a design partner</a>
       </div>
     </div>
   </section>
-  <!-- Footer -->
-  <footer>
-    <span>FlutterProbe &middot; BSL 1.1 &middot; &copy; 2026 Alpha Wave Systems S.A. de C.V.</span>
-    <div class="foot-links">
-      <a href="/getting-started/installation/">Docs</a>
-      <a href="/tutorials/flutter-login-test/">Tutorials</a>
-      <a href="/pricing/">Pricing</a>
-      <a href="https://github.com/AlphaWaveSystems/flutter-probe/wiki">Wiki</a>
-      <a href="https://github.com/AlphaWaveSystems/flutter-probe">GitHub</a>
-      <a href="/terms/">Terms</a>
-      <a href="/privacy/">Privacy</a>
-      <a href="/refunds/">Refunds</a>
-      <a href="/contact/">Contact</a>
-    </div>
-  </footer>
-</body>
-</html>
+  <script is:inline>
+    (function () {
+      var b = document.getElementById('copy-install');
+      if (!b) return;
+      b.addEventListener('click', function () {
+        var done = function () { b.textContent = 'Copied!'; setTimeout(function () { b.textContent = 'Copy'; }, 1500); };
+        try { navigator.clipboard.writeText('brew tap AlphaWaveSystems/tap && brew install probe').then(done, function () { b.textContent = 'Select and copy'; }); }
+        catch (e) { b.textContent = 'Select and copy'; }
+      });
+    })();
+  </script>
+</Site>
