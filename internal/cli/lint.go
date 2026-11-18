@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 	"github.com/alphawavesystems/flutter-probe/internal/runner"
@@ -63,7 +64,7 @@ var lintCmd = &cobra.Command{
 			}
 			var program []string
 			for _, p := range report.Program {
-				program = append(program, p.Message)
+				program = append(program, programFindingText(p))
 			}
 			warnings = append(program, warnings...)
 			if len(problems) == 0 && len(warnings) == 0 {
@@ -91,4 +92,14 @@ var lintCmd = &cobra.Command{
 		fmt.Println("  All files valid.")
 		return nil
 	},
+}
+
+// programFindingText is how `probe lint` prints a finding from the program checks: with a `line N:` prefix, so a script that
+// reads the output finds the line the same way as for a reference finding. A message that already names its line (the count and
+// zero-state warnings say `test "x", line 4: ...`) is printed as it is, so the line is not said twice.
+func programFindingText(f runner.LintFinding) string {
+	if f.Line <= 0 || strings.Contains(f.Message, fmt.Sprintf(", line %d:", f.Line)) {
+		return f.Message
+	}
+	return fmt.Sprintf("line %d: %s", f.Line, f.Message)
 }

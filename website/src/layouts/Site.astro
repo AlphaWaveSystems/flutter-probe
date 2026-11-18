@@ -1,6 +1,7 @@
 ---
 // The frame of the landing page, pricing, Probe Cloud and the legal pages: head, nav, footer and the one shared stylesheet.
-// No script, cookie or analytics is added here, and nothing is loaded from another host: the fonts are the ones the reader's system has.
+// No script, cookie or analytics is added here, and nothing is loaded from another host: no font, stylesheet, script or image (the fonts are the
+// visitor's system fonts, see --font and --mono in the stylesheet). scripts/site_third_party_test.go checks the sources and the built pages.
 // A legal page names its twin in the other language (other): the head then links both, and the footer links the legal pages in the page's language.
 import '../styles/site.css';
 

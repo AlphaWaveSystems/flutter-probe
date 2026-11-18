@@ -66,7 +66,7 @@ FlutterProbe's `wait until` command polls the widget tree directly with configur
 
 `integration_test` operates inside the Flutter engine. It cannot tap native permission prompts, system keyboards, or OS-level alerts. If your app requests camera access or location permissions, `integration_test` cannot automate that step.
 
-FlutterProbe handles permissions, clipboard access, and GPS location natively. Commands like `set location 37.7749, -122.4194` and `grant permission camera` work across Android and iOS without platform-specific workarounds. See the [Android](/platform/android/) and [iOS](/platform/ios/) platform guides for details.
+FlutterProbe handles permissions, clipboard access, and GPS location natively. Commands like `set location 37.7749, -122.4194` and `allow permission "camera"` work across Android and iOS without platform-specific workarounds. See the [Android](/platform/android/) and [iOS](/platform/ios/) platform guides for details.
 
 ### 4. No built-in reporting
 

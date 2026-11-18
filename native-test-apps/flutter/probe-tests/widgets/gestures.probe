@@ -1,0 +1,56 @@
+# Needs the gestures build: flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=gestures (see the README).
+# What each test shows is also in docs/compat/MATRIX.md: a matrix cell is set only from a test that ran.
+# A text inside a gesture widget, as apps build custom buttons and rows. Each handler counts in the state line, so a test shows which
+# handler got the gesture.
+
+before each test
+  restart the app
+  # the last element of the screen with an id: right after a restart the screen can still be being built (issue #793)
+  wait until #wf_g_state appears
+
+test "a tap on a text inside a GestureDetector or an InkWell reaches it"
+  tap "Tap me"
+  see "Tap: 1"
+  tap "Ink me"
+  see "Ink: 1"
+
+test "the same by id"
+  tap #wf_g_tap
+  see "Tap: 1"
+  tap #wf_g_ink
+  see "Ink: 1"
+
+test "double tap and long press reach a detector that has only that gesture"
+  double tap "Double me"
+  see "Double: 1"
+  long press "Hold me"
+  see "Hold: 1"
+
+# A single tap on a detector with only onDoubleTap does nothing, as a person's single tap would; the step passes with no warning, since
+# the tap did reach the detector.
+test "a single tap on a double-tap-only detector does nothing"
+  tap "Double me"
+  see "Double: 0"
+
+test "with a detector inside another, the inner one gets the tap"
+  tap "Nested"
+  see "Inner: 1"
+  see "Outer: 0"
+
+# FINDING: a detector with both onTap and onDoubleTap runs onTap only after the double-tap timeout (Flutter's kDoubleTapTimeout, 300 ms),
+# since a second tap could still come; `tap` returns before that, so a `see` right after it fails. Wait for the result instead.
+test "a detector with tap and double tap tells them apart"
+  tap "Tap or double"
+  wait until "Single: 1" appears
+  see "Twice: 0"
+  double tap "Tap or double"
+  see "Twice: 1"
+  see "Single: 1"
+
+# The key on a Semantics wrapper around the detector (not on the detector): taps by id were reported to miss on physical devices with
+# this structure. On an emulator and a simulator it works, by text and by id.
+test "a detector inside a Semantics wrapper that carries the key"
+  tap "Key on wrapper"
+  see "Wrapper: 1"
+  tap #wf_g_wrapper
+  see "Wrapper: 2"
