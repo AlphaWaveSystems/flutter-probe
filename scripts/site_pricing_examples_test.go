@@ -47,7 +47,7 @@ func readSellableResults(t *testing.T) (free, team int) {
 // pricingExampleProblems returns what is wrong with the results example in the pricing page source, given the allowances of Free and Team.
 func pricingExampleProblems(page string, free, team int) (problems []string) {
 	want := []string{
-		"A result is one test in one run",
+		"A result is one test, or one example row of a data-driven test, in one run, and a retried test stays one result",
 		fmt.Sprintf("a %d-test suite uploaded on every pull request uses %s results in %d runs", exampleSuiteTests, commas(exampleSuiteTests*(free/exampleSuiteTests)), free/exampleSuiteTests),
 		fmt.Sprintf("%s results a month cover %d such runs", commas(free), free/exampleSuiteTests),
 		fmt.Sprintf("%s results a month cover %d", commas(team), team/exampleSuiteTests),
@@ -56,11 +56,31 @@ func pricingExampleProblems(page string, free, team int) (problems []string) {
 		problems = append(problems, fmt.Sprintf("the allowances %d and %d are not whole multiples of the %d-test example suite: change the example", free, team, exampleSuiteTests))
 	}
 	for _, w := range want {
-		if !strings.Contains(page, w) {
+		if !hasPhrase(page, w) {
 			problems = append(problems, fmt.Sprintf("the pricing page does not say %q", w))
 		}
 	}
 	return problems
+}
+
+// hasPhrase reports whether page contains phrase as a whole: a number at either end must not be part of a longer number, so "cover 500" is not found in
+// "cover 5000" and "1,000 results" is not found in "21,000 results".
+func hasPhrase(page, phrase string) bool {
+	isNum := func(b byte) bool { return b >= '0' && b <= '9' }
+	for from := 0; ; {
+		i := strings.Index(page[from:], phrase)
+		if i < 0 {
+			return false
+		}
+		i += from
+		end := i + len(phrase)
+		startOK := !isNum(phrase[0]) || i == 0 || !(isNum(page[i-1]) || page[i-1] == ',')
+		endOK := !isNum(phrase[len(phrase)-1]) || end == len(page) || !(isNum(page[end]) || (page[end] == ',' && end+1 < len(page) && isNum(page[end+1])))
+		if startOK && endOK {
+			return true
+		}
+		from = i + 1
+	}
 }
 
 func TestPricingResultsExampleMatchesSellable(t *testing.T) {
@@ -75,7 +95,7 @@ func TestPricingResultsExampleMatchesSellable(t *testing.T) {
 }
 
 func TestPricingExampleProblems(t *testing.T) {
-	page := "A result is one test in one run: a 200-test suite uploaded on every pull request uses 1,000 results in 5 runs, so 1,000 results a month cover 5 such runs and 100,000 results a month cover 500."
+	page := "A result is one test, or one example row of a data-driven test, in one run, and a retried test stays one result: a 200-test suite uploaded on every pull request uses 1,000 results in 5 runs, so 1,000 results a month cover 5 such runs and 100,000 results a month cover 500."
 	cases := []struct {
 		name       string
 		page       string
@@ -86,7 +106,11 @@ func TestPricingExampleProblems(t *testing.T) {
 		{"the free allowance changed", page, 2000, 100000, true},
 		{"the team allowance changed", page, 1000, 250000, true},
 		{"the arithmetic was edited", strings.Replace(page, "in 5 runs", "in 4 runs", 1), 1000, 100000, true},
-		{"the definition is gone", strings.Replace(page, "A result is one test in one run: ", "", 1), 1000, 100000, true},
+		{"the definition is gone", strings.Replace(page, "A result is one test, or one example row of a data-driven test, in one run, and a retried test stays one result: ", "", 1), 1000, 100000, true},
+		{"the definition lost its data-driven rows", strings.Replace(page, ", or one example row of a data-driven test,", "", 1), 1000, 100000, true},
+		{"the team coverage is a longer number (5000)", strings.Replace(page, "cover 500.", "cover 5000.", 1), 1000, 100000, true},
+		{"the free runs are a longer number (50 runs)", strings.Replace(page, "in 5 runs", "in 50 runs", 1), 1000, 100000, true},
+		{"the allowance is a longer number (21,000 results)", strings.Replace(page, "so 1,000 results a month", "so 21,000 results a month", 1), 1000, 100000, true},
 		{"an allowance that is not a multiple", page, 1050, 100000, true},
 	}
 	for _, c := range cases {
@@ -108,8 +132,12 @@ func TestApplyBlocksLinkToTheDesignPartnerGuide(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(string(b), `href="/tools/design-partner-guide/"`) {
-			t.Errorf("%s does not link to the design-partner guide (/tools/design-partner-guide/)", page)
+		want := 1
+		if strings.HasSuffix(page, "index.astro") {
+			want = 2 // the design-partner card and the answer to "What is a design partner?"
+		}
+		if got := strings.Count(string(b), `href="/tools/design-partner-guide/"`); got < want {
+			t.Errorf("%s has %d link(s) to the design-partner guide (/tools/design-partner-guide/), want at least %d", page, got, want)
 		}
 	}
 }
