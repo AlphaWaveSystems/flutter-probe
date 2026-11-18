@@ -31,7 +31,7 @@ brew tap AlphaWaveSystems/tap
 brew install probe
 
 # Option B: Go install (requires Go 1.26.10+)
-go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest
+go install github.com/alphawavesystems/flutter-probe/cmd/probe@latest
 
 # Option C: Download from GitHub Releases (all platforms)
 # https://github.com/AlphaWaveSystems/flutter-probe/releases/latest

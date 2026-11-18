@@ -78,7 +78,7 @@ const sampleTestFile = `test "the app launches successfully"
   # see "Your text"
 `
 
-const sampleRecipeFile = `recipe "log in as" (email, password)
+const sampleRecipeFile = `recipe "sign in as" (email, password)
   open the app
   wait until "Sign In" appears
   tap on "Sign In"

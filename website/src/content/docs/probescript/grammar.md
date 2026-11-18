@@ -614,7 +614,7 @@ see-native-step = ( "see" | "don't see" | "dont see" ) , "native" , fillers , te
 
 see-tail      = fillers , [ "exactly" , [ INT ] , fillers ] , selector ,
                 { "button" | "field" | filler } , [ state-check ] , [ "matching" , text-operand ] ;
-state-check   = "enabled" | "disabled" | "checked" | "focused" | "contains" , text-operand ;
+state-check   = "enabled" | "disabled" | "checked" | "focused" | "filled" | "empty" | "contains" , text-operand ;
 ```
 
 - At most **one** `state-check` is allowed, optionally followed by one `matching` pattern (a regular expression).
@@ -630,6 +630,8 @@ test "assertions"
   see "Submit" is disabled
   see "Terms" is checked
   see "Email" is focused
+  see #password_field is filled
+  see #password_field is empty
   see "Price" contains "$9.99"
   see "Email" matching ".*@.*"
   see "Price" contains "$" matching "[0-9]+"
@@ -1425,7 +1427,7 @@ The grammar above follows the parser.
 | Documented | What the parser does | Use instead |
 |---|---|---|
 | `type <email> into "Email"`, `see <expected>` (unquoted placeholders in Recipes and Data-driven pages) | lexical error: "unquoted placeholder" | `type "<email>" into "Email"` |
-| `log in as "u" with "p"` as a recipe call (Recipes and Hooks pages) | `log` is a keyword: parsed as `log` plus a call named `as <arg> with <arg>` | name recipes so the first word is not a keyword (`sign in as`) |
+| a recipe named `log in as`, called as `log in as "u" with "p"` (earlier versions of the Recipes, Hooks and tutorial pages and of the `probe init` scaffold) | `log` is a keyword: parsed as `log` plus a call named `as <arg> with <arg>`; `probe lint` warns on the declaration | name recipes so the first word is not a keyword (`sign in as`) |
 | `tap the "Login" button` "is equivalent to" `tap "Login"` (Dictionary, Filler Words) | trailing `button` / `field` is only consumed by `type`, `see` and `don't see`; after `tap` it becomes a stray recipe call | `tap "Login"` |
 | `see 3 "Item"` (Syntax, Assertions) | no count is parsed; an empty assertion plus a recipe call `3 <arg>` | `see exactly 3 "Item"` |
 | `tap <ElevatedButton>` (Syntax, Selectors table) | lexical error (unquoted `<`) | `tap ElevatedButton` |
