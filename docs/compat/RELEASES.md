@@ -57,7 +57,7 @@ diff** is `docs/compat/catalog.json` between the two releases. Anything not in o
   - **CI pins:** `.github/workflows/ci.yml` uses Flutter `3.29.x` and `.github/workflows/e2e.yml` `3.41.4`; both predate AGP 9 and are not 3.50.0. Neither workflow builds the fixtures in this repository: `ci.yml` runs the agent's own tests, and `e2e.yml` builds the app it checks out into `e2e-app` from
     another repository, whose Gradle, AGP and Kotlin versions are not these fixtures' and were not read here; it will need 3.50.0's minimums when its pin moves. Aligning the two pins to one recorded version is a separate
     change.
-- **Fixture suite on 3.50.0:** run (2026-11-16) on emulator-5600, AVD `ProbeWebViewSpike` (Android 15, API 35): `native-test-apps/flutter/probe-tests/flutter_suite.probe`, **5 of 5 passed** with the app built by Flutter 3.50.0 and the
+- **Fixture suite on 3.50.0:** run (2026-11-16) on the emulator `ProbeWebViewSpike` (Android 15, API 35): `native-test-apps/flutter/probe-tests/flutter_suite.probe`, **5 of 5 passed** with the app built by Flutter 3.50.0 and the
   raised Gradle, AGP and Kotlin; the same suite with the app built by 3.44.8 and the same fixture files also passed 5 of 5. Only that suite was run: not the list, crash, load or WebView scenarios, and not iOS. The CLI was a
   development build, which prints "version mismatch" against the agent.
 - **Release notes and breaking-change pages:** read as above; the individual breaking-change pages and the blog post were not.
@@ -101,7 +101,7 @@ diff** is `docs/compat/catalog.json` between the two releases. Anything not in o
 - **Source:** the SDK installed on the machine that made the first `catalog.json` (framework commit dated 2026-07-23, revision `058e0af2c2b57e369d905a03ac9748b0ebf543c6`). 3.44.9 (2026-08-06, Dart 3.12.2, `6b182d2c75`) followed it; not assessed.
 - **Catalog:** 570 widgets (widgets 321, material 191, cupertino 58); 30 abstract; 3 marked deprecated (`ButtonBar`, `RawKeyboardListener`, `WillPopScope`).
 - **Tool requirements (tool source at the 3.44.8 tag commit, `058e0af2c2b57e369d905a03ac9748b0ebf543c6`, which a scratch clone of the tag has):** Gradle 8.7.0 error / 8.14.0 warn / 9.1.0 template; AGP 8.6.0 / 8.11.1 / 9.0.1; Kotlin Gradle plugin 2.0.0 / 2.2.20 / 2.3.20; Java 17; `minSdk` 23 / 24; Xcode 15.
-- **Release notes and breaking changes:** not assessed. **Fixture suite on this version:** run on the fixtures as raised for 3.50.0 (Gradle 9.5.0, AGP 9.3.1, Kotlin 2.4.20): 5 of 5 on emulator-5600 (see the 3.50.0 entry). The fixtures as they were before the raise (the template defaults of this release) were not built here.
+- **Release notes and breaking changes:** not assessed. **Fixture suite on this version:** run on the fixtures as raised for 3.50.0 (Gradle 9.5.0, AGP 9.3.1, Kotlin 2.4.20): 5 of 5 on the emulator `ProbeWebViewSpike` (see the 3.50.0 entry). The fixtures as they were before the raise (the template defaults of this release) were not built here.
 - **Dart 3.12.2 changes:** not assessed.
 
 ## Packages the fixture apps depend on
