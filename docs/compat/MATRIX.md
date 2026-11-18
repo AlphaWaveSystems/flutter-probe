@@ -168,6 +168,8 @@ Not covered by the screen: `PageView` (a swipe), dragging a `Scrollbar` thumb, a
 
 ### Dialogs and sheets (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=dialogs`, `probe-tests/widgets/dialogs.probe`)
 
+Also measured on two named devices, with Flutter 3.44.8 and the agent from main: `Compat-Pixel-API35` (Android 15, API 35) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5). The suite (12 tests) passed 3 of 3 runs on each device, and the 9 variants that must fail failed on both, each with the message in its comment, so the findings below hold on iOS too. No run had a restart failure (issue #823). The earlier runs below were on one emulator of another session, Android only.
+
 | Widget (fixture id) | find | tap | close | read | Result |
 |---|---|---|---|---|---|
 | `AlertDialog` "Delete item?" with the actions "Cancel" and "Delete" (`wf_open_dialog`, `wf_dialog_cancel`, `wf_dialog_delete`) | pass (title and text; `wait until "Delete item?" appears`) | pass (`tap "Cancel"`; `tap #wf_dialog_delete`); `tap "Delete"` taps the title, see below | pass (an action; `go back`) | pass (`Dialog: cancelled\|deleted\|none`) | pass, with the findings below |
@@ -187,7 +189,7 @@ Not covered by the screen: `PageView` (a swipe), dragging a `Scrollbar` thumb, a
 - **A text selector takes the first widget whose text contains it, so `tap "Delete"` taps the dialog's title "Delete item?" and not its button "Delete".** The dialog stays open (`Dialog: none`). The button has to be named by id (`tap #wf_dialog_delete`). `tap "Discard"` hit the title "Discard changes?" the same way, which is why the Cupertino actions have ids; `tap "Cancel"` and `tap "Copy link"` are not ambiguous and work by text.
 - **A `SnackBar` that has an action stays on screen until it is dismissed, on the Flutter versions measured, unless it is built with `persist: false`.** The fixture sets it, so that "it goes away by itself" can be tested; without it, `wait until "Saved" disappears` timed out after 30 seconds. That is Flutter's own default, not the agent's.
 
-Not covered by the screen: iOS (a Cupertino dialog and sheet were run on Android only), a dialog with `barrierDismissible: false`, a dialog with a text field, a scrolling dialog, `showDatePicker` and `showTimePicker`, a persistent bottom sheet, a floating or queued snack bar, `PopupMenuButton`, `Drawer`, and native system dialogs (see `tools/system-dialogs`). The 9 variants of the suite that must fail
+Not covered by the screen: a physical iPhone and iOS versions other than 26.5 (the iOS run was one simulator), a dialog with `barrierDismissible: false`, a dialog with a text field, a scrolling dialog, `showDatePicker` and `showTimePicker`, a persistent bottom sheet, a floating or queued snack bar, `PopupMenuButton`, `Drawer`, and native system dialogs (see `tools/system-dialogs`). The 9 variants of the suite that must fail
 (`probe-tests/negative/dialogs.probe.expect-fail`) were run: all 9 fail at their own step with the message in their comment (a snack bar and its action before `Save`, a dialog seen after Cancel, `tap "Delete"` taken for the button, a tap on a button that the dialog body covers counted, the wrong state, a sheet seen after an option, a state before its tap, the Cancel button after a tap on the barrier).
 
 ### Progress indicators (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=progress`, `probe-tests/widgets/progress.probe`)
