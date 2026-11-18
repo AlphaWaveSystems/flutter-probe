@@ -28,6 +28,12 @@ func TestRecipeCallProblem(t *testing.T) {
 		{"restart everything", 0, "restart"},
 		{"press the home key", 0, ""},
 		{"2nd attempt", 0, ""},
+		// The simulated call carries one quoted argument per parameter, so the parameter count matters. Only a filler word on
+		// its own shows it: `to` alone is skipped as a filler (no call), `to "x"` is a call.
+		{"to", 0, "to"},
+		{"to", 1, ""},
+		{"the", 0, "the"},
+		{"the", 2, ""},
 		{"", 0, ""},             // no words: not simulated
 		{`say "hi"`, 0, ""},     // not plain words: not simulated
 		{"fill <email>", 1, ""}, // a placeholder: not simulated

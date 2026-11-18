@@ -55,3 +55,13 @@ func TestLintReportsTheLineOfEachKeywordRecipe(t *testing.T) {
 		t.Fatalf("want warnings on lines 4 and 7, got %+v", got)
 	}
 }
+
+// The call that is simulated has one argument per parameter: a recipe named like a filler word is a call only when it has a parameter.
+func TestLintUsesTheParameterCountOfTheRecipe(t *testing.T) {
+	if got := recipeNameWarnings(t, "recipe \"to\" (x)\n  open the app\n"); len(got) != 0 {
+		t.Errorf("recipe \"to\" (x): unexpected warning %v", got)
+	}
+	if got := recipeNameWarnings(t, "recipe \"to\"\n  open the app\n"); len(got) != 1 {
+		t.Errorf("recipe \"to\" with no parameters: want one warning, got %v", got)
+	}
+}

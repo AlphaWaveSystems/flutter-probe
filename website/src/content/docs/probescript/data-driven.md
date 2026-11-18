@@ -101,6 +101,8 @@ with examples:
   "guest@test.com"    "guest123"   "Read Only"
 ```
 
+`probe lint` on the recipe file alone warns that `<email>` and `<password>` are not defined, because that file has no examples table; lint the test file that uses the recipe (it reads the recipe through `use` or the recipes folder and sees the columns), and the warnings are gone.
+
 Do not pass a column to a recipe as an argument (`sign in as "<email>" with "<password>"`) and do not give a recipe a parameter with the name of a column. A call binds its argument text as it is, so a parameter named `email` receives the text `<email>` and replaces the row's value, and the step then types `<email>` literally.
 
 ## Loading Data from CSV
