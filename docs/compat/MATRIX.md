@@ -17,9 +17,6 @@ Cells: *find* (select by text, id or type), *tap*, *type* (enter text), *scroll*
 | Lists and scrolling | `ListView`, `GridView`, `SingleChildScrollView`, `Scrollbar`, `PageView` | see below (`PageView` not assessed) | see below | n/a | see below | see below | `lists` screen | `probe-tests/widgets/lists.probe` |
 | Dialogs and sheets | `AlertDialog`, `BottomSheet`, `SnackBar`, `CupertinoAlertDialog` | see below | see below | n/a | n/a | see below | `dialogs` screen | `probe-tests/widgets/dialogs.probe` |
 | Navigation | `AppBar`, `NavigationBar`, `TabBar`, `Drawer`, `Navigator` | see below (`AppBar`, `Navigator` only) | see below | n/a | see below (scroll) | see below | `navigation` screen | `probe-tests/widgets/navigation.probe` |
-| Layout and containers | `Container`, `Row`, `Column`, `Stack`, `Card` | not assessed | not assessed | n/a | not assessed | not assessed | not assessed | not assessed |
-
-| Navigation | `AppBar`, `NavigationBar`, `TabBar`, `Drawer`, `Navigator` | see below (`AppBar`, `Navigator` only) | see below | n/a | not assessed | see below | `navigation` screen | `probe-tests/widgets/navigation.probe` |
 | Layout and containers | `Container`, `Row`, `Column`, `Stack`, `Card`, `Opacity`, `Visibility`, `Offstage`, `IgnorePointer`, `AbsorbPointer` | see below (`Opacity`, `Visibility`, `Offstage`, `IgnorePointer`, `AbsorbPointer`, a covered `Stack` child; the others not assessed) | see below | n/a | not assessed | see below | `layout` screen | `probe-tests/widgets/layout.probe` |
 | Gestures | `GestureDetector`, `Dismissible`, `Draggable`, `InkWell` | not assessed | not assessed | n/a | not assessed | n/a | not assessed | not assessed |
 | WebView content | an embedded web page (`webview_flutter`) | see below | see below | see below | not assessed | see below | `native-test-apps/flutter-webview` | `native-test-apps/flutter-webview/probe-tests/webview.probe` |
