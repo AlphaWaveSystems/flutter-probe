@@ -10,7 +10,7 @@ import 'package:flutter/material.dart'
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
-import 'finder.dart' show ProbeFinder, probeRouteOf;
+import 'finder.dart' show ProbeFinder, probeIndexedStackShown, probeRouteOf;
 import 'protocol.dart';
 
 // Support for the interactive device view (probe.tap_at, probe.long_press_at,
@@ -193,7 +193,13 @@ List<ProbeNode> collectProbeNodes() {
     } catch (_) {
       // Element may be disposed or mid-build during the walk: skip it.
     }
-    e.visitChildren((c) => visit(c, childParent));
+    // An IndexedStack lists only the child it shows.
+    final shown = probeIndexedStackShown(e);
+    var position = 0;
+    e.visitChildren((c) {
+      if (shown == null || position == shown) visit(c, childParent);
+      position++;
+    });
   }
 
   root.visitChildren((c) => visit(c, -1));

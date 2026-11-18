@@ -147,7 +147,10 @@ not-found error lists the texts and keys visible at that moment, which is usuall
 | positional | `tap "Edit" in "Settings"` | a match inside another widget |
 
 Only widgets on the **current route** and not behind `Offstage`/`Visibility(false)` are matched, so a screen
-underneath the one the user sees cannot produce a false positive.
+underneath the one the user sees cannot produce a false positive. The same goes for the children of an
+`IndexedStack` that it does not show (its `index`; a `null` index shows none): they stay mounted, keep their size and
+state, and are not matched until the stack shows them. A closed `DropdownButton` keeps its items in an `IndexedStack`, so
+only its selected item or hint is matched; its menu items are matched once the menu is open.
 
 ## Behaviors worth knowing
 
