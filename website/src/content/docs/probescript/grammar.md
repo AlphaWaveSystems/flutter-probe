@@ -1427,7 +1427,7 @@ The grammar above follows the parser.
 | Documented | What the parser does | Use instead |
 |---|---|---|
 | `type <email> into "Email"`, `see <expected>` (unquoted placeholders in Recipes and Data-driven pages) | lexical error: "unquoted placeholder" | `type "<email>" into "Email"` |
-| `log in as "u" with "p"` as a recipe call (Recipes and Hooks pages) | `log` is a keyword: parsed as `log` plus a call named `as <arg> with <arg>` | name recipes so the first word is not a keyword (`sign in as`) |
+| a recipe named `log in as`, called as `log in as "u" with "p"` (earlier versions of the Recipes, Hooks and tutorial pages and of the `probe init` scaffold) | `log` is a keyword: parsed as `log` plus a call named `as <arg> with <arg>`; `probe lint` warns on the declaration | name recipes so the first word is not a keyword (`sign in as`) |
 | `tap the "Login" button` "is equivalent to" `tap "Login"` (Dictionary, Filler Words) | trailing `button` / `field` is only consumed by `type`, `see` and `don't see`; after `tap` it becomes a stray recipe call | `tap "Login"` |
 | `see 3 "Item"` (Syntax, Assertions) | no count is parsed; an empty assertion plus a recipe call `3 <arg>` | `see exactly 3 "Item"` |
 | `tap <ElevatedButton>` (Syntax, Selectors table) | lexical error (unquoted `<`) | `tap ElevatedButton` |
