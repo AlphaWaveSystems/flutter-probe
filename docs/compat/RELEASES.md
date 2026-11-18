@@ -77,7 +77,7 @@ diff** is `docs/compat/catalog.json` between the two releases. Anything not in o
   - **CI pins:** `.github/workflows/ci.yml` uses Flutter `3.29.x` and `.github/workflows/e2e.yml` `3.41.4`; both predate AGP 9 and are not 3.50.0. Neither workflow builds the fixtures in this repository: `ci.yml` runs the agent's own tests, and `e2e.yml` builds the app it checks out into `e2e-app` from
     another repository, whose Gradle, AGP and Kotlin versions are not these fixtures' and were not read here; it will need 3.50.0's minimums when its pin moves. Aligning the two pins to one recorded version is a separate
     change.
-- **Fixture suite on 3.50.0:** run (2026-11-16) on emulator-5600, AVD `ProbeWebViewSpike` (Android 15, API 35): `native-test-apps/flutter/probe-tests/flutter_suite.probe`, **5 of 5 passed** with the app built by Flutter 3.50.0 and the
+- **Fixture suite on 3.50.0:** run (2026-11-16) on the emulator `ProbeWebViewSpike` (Android 15, API 35): `native-test-apps/flutter/probe-tests/flutter_suite.probe`, **5 of 5 passed** with the app built by Flutter 3.50.0 and the
   raised Gradle, AGP and Kotlin; the same suite with the app built by 3.44.8 and the same fixture files also passed 5 of 5. Only that suite was run: not the list, crash, load or WebView scenarios, and not iOS. The CLI was a
   development build, which prints "version mismatch" against the agent.
 - **Release notes and breaking-change pages:** read as above; of the individual breaking-change pages only the two named under "Deprecations that reach the agent" were read (2026-11-17); the blog post was not.

@@ -106,7 +106,7 @@ Flakiness is highly dependent on test implementation quality. These numbers refl
 
 No tool is perfect. Here is where FlutterProbe has real limitations:
 
-**ProbeScript is not Dart.** For teams that want their E2E tests in the same language as their app, ProbeScript is an additional syntax to learn. Complex assertion logic that would be straightforward in Dart requires using [hooks](/advanced/hooks/) or [recipes](/advanced/recipes/), which adds indirection.
+**ProbeScript is not Dart.** For teams that want their E2E tests in the same language as their app, ProbeScript is an additional syntax to learn. Complex assertion logic that would be straightforward in Dart requires using [hooks](/probescript/hooks/) or [recipes](/probescript/recipes/), which adds indirection.
 
 **Agent dependency.** The Dart agent must be initialized in the app. This is a code change to your `main()` function, guarded behind an `assert` block for debug-only inclusion. It is minimal, but it is a modification to the app under test.
 
