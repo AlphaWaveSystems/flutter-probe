@@ -120,3 +120,6 @@ native-test-apps/studio-fixture/ios/.symlinks/
 native-test-apps/studio-fixture/pubspec.lock
 # Studio E2E reports
 reports/studio-e2e*/
+
+# The sample dashboard pages are generated from website/demo-templates by website/scripts/build-demo.mjs
+website/public/demo/
