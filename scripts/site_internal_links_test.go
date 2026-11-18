@@ -218,6 +218,10 @@ func TestDemoPagesResolveFromTheirTemplates(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// A folder under demo-templates is not a page, even if its name ends in .html.
+	if err := os.MkdirAll(filepath.Join(root, "demo-templates", "folder.html"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	for text, want := range map[string]string{
 		"[a](/demo/)":             "",
 		"[a](/demo)":              "",
@@ -227,6 +231,7 @@ func TestDemoPagesResolveFromTheirTemplates(t *testing.T) {
 		"[a](/demo/missing.html)": "/demo/missing.html",
 		"[a](/demonstration/)":    "/demonstration/",
 		"[a](/other/7-days.html)": "/other/7-days.html",
+		"[a](/demo/folder.html)":  "/demo/folder.html",
 	} {
 		got := strings.Join(brokenInternalLinks(root, text), "|")
 		if got != want {

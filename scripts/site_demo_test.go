@@ -186,3 +186,45 @@ func TestWebsiteBuildAndDevRunTheDemoGenerator(t *testing.T) {
 		t.Error(".gitignore does not ignore the generated website/public/demo/")
 	}
 }
+
+// The apply link goes into the pages as given: a URL that holds `$&`, `$1` or `$$` is not read as a replacement pattern.
+func TestDemoGeneratorKeepsDollarSignsInTheApplyLink(t *testing.T) {
+	url := "https://example.org/new?template=x.yml&a=$&&b=$1&c=$$&d=$`&e=$'"
+	// The URL goes through the environment: it holds a backtick, which a JavaScript template literal could not carry.
+	script := `import { render } from './scripts/build-demo.mjs'; process.stdout.write(render('<a href="{{APPLY_FORM}}">x</a> {{APPLY_FORM}}', '2026-10-11', process.env.APPLY_URL))`
+	cmd := exec.Command(nodeOrSkip(t), "--input-type=module", "-e", script)
+	cmd.Dir = "../website"
+	cmd.Env = append(os.Environ(), "APPLY_URL="+url)
+	b, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("render failed: %v\n%s", err, b)
+	}
+	want := `<a href="` + url + `">x</a> ` + url
+	if string(b) != want {
+		t.Errorf("render produced %q, want %q", b, want)
+	}
+}
+
+// A folder under the templates whose name ends in .html is not a page: the generator reads files only.
+func TestDemoGeneratorReadsFilesOnlyFromTheTemplates(t *testing.T) {
+	templates, out := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(templates, "a.html"), []byte(`<p>{{APPLY_FORM}} 2026-10-11</p>`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(templates, "folder.html"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(nodeOrSkip(t), "scripts/build-demo.mjs", "--date", "2027-03-05", "--out", out, "--templates", templates)
+	cmd.Dir = "../website"
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("build-demo failed on a folder named .html: %v\n%s", err, b)
+	}
+	entries, err := os.ReadDir(out)
+	if err != nil || len(entries) != 1 || entries[0].Name() != "a.html" {
+		t.Errorf("output = %v (%v), want only a.html", entries, err)
+	}
+	got, _ := os.ReadFile(filepath.Join(out, "a.html"))
+	if !strings.Contains(string(got), "2027-03-05") {
+		t.Errorf("the date of the template did not move: %s", got)
+	}
+}
