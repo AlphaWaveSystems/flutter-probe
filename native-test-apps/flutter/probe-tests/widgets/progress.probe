@@ -1,0 +1,31 @@
+# Needs the progress build: flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=progress (see the README).
+# What each test shows is also in docs/compat/MATRIX.md: a matrix cell is set only from a test that ran.
+# Waiting for a spinner to go away. "Load", "Load forever" and "Loaded" share a prefix, so the buttons are tapped by id.
+
+before each test
+  restart the app
+  # the last element of the screen with an id: right after a restart the screen can still be being built (issue #793)
+  wait until #wf_progress_state appears
+
+test "a spinner is seen while it runs, and waited for until it goes away"
+  tap #wf_load
+  see #wf_spinner
+  see "Status: loading"
+  wait until #wf_spinner disappears
+  see "Loaded"
+  see "Status: loaded"
+
+test "waiting for the result text works as well as waiting for the spinner"
+  tap #wf_load
+  wait until "Loaded" appears
+  don't see #wf_spinner
+
+# A screen that animates forever (an indeterminate spinner) does not stop the steps: a tap and a see still answer.
+test "steps still run while a spinner animates forever"
+  tap #wf_load_forever
+  see #wf_forever
+  see "Status: loading forever"
+  see #wf_linear
+
+test "a progress bar with a value is found by its id"
+  see #wf_linear
