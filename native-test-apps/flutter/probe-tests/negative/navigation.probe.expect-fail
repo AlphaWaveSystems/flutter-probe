@@ -4,7 +4,7 @@
 #   cp probe-tests/negative/navigation.probe.expect-fail /tmp/navigation-negative.probe
 #   probe test /tmp/navigation-negative.probe --device <serial> -y       # (the navigation build, the same probe.yaml as for navigation.probe)
 #
-# Expected: 0 passed, 5 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+# Expected: 0 passed, 7 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
 # Each test must fail at its own step, with the message in its comment. A failure at the `wait until` of `before each test` (a timeout
 # waiting for the screen's last element) is NOT the expected failure: the screen never showed, and the run proves nothing.
 
@@ -42,3 +42,12 @@ test "N4 the message route after go back"
 # Expected: tap "Serch": Widget not found: text("Serch") — visible texts: [...]
 test "N5 a tooltip that is not on the screen"
   tap "Serch"
+
+# Expected: tap "Open bottom message": Widget not found: text("Open bottom message") (the button is below the fold of a lazy list and not built before a scroll)
+test "N6 a button below the fold is not tapped without a scroll step"
+  tap "Open bottom message"
+
+# Expected: see "From: Grace": Expected to see "text("From: Grace")" but it was not found (the route was not opened: the button was scrolled to but not tapped)
+test "N7 the route of the bottom button is not open before the tap"
+  scroll down until "Open bottom message" appears
+  see "From: Grace"
