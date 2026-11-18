@@ -88,7 +88,7 @@ export default defineConfig({
           label: 'Advanced',
           items: [
             { label: 'Visual Regression', slug: 'advanced/visual-regression' },
-            { label: 'Self-Healing', slug: 'advanced/self-healing' },
+            { label: 'When a Selector Breaks', slug: 'advanced/self-healing' },
             { label: 'Testing localized apps', slug: 'advanced/multi-language' },
             { label: 'Testing against backend data', slug: 'advanced/backend-data' },
             { label: 'Timeouts, waiting and retries', slug: 'advanced/timeouts-and-retries' },
