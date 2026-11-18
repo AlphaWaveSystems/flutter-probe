@@ -1,5 +1,5 @@
 // Package ai provides AI-assisted capabilities for FlutterProbe:
-//   - Self-healing selectors (find broken locators and suggest repairs)
+//   - Self-healing selector matching (a library; not called by the runner, see below)
 //   - AI test generation from recordings
 package ai
 
@@ -10,6 +10,10 @@ import (
 )
 
 // ---- Self-Healing Selectors ----
+//
+// Nothing in the runner or the CLI calls SelfHealer: `probe test` does not repair a selector while it runs, and
+// the pages that said it does were wrong. The advisory selector proposals are `probe test --ai-heal` and Studio's
+// Suggest a fix, which do not use this type. It is kept for its tests and for a future use.
 
 // WidgetInfo is lightweight widget metadata returned by the agent.
 type WidgetInfo struct {

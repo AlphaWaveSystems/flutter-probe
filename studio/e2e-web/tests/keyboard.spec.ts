@@ -3,16 +3,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { openPath, openStudio, workspace } from "./helpers";
 
-// A REPORT, not a gate: for each of the 11 overlays, four keyboard properties are measured and printed (`KBD …` lines, attached as JSON):
+// The keyboard behaviour of the 11 overlays, each opened by its real control (no unhiding), four properties each (44 assertions):
 //   in      the focus is inside the overlay when it opens
 //   tab     Tab and Shift+Tab never leave the overlay (12 presses forward, 3 back), measured on a second opening
 //   esc     Escape closes it
-//   back    after Escape the focus is on what opened it (the button, or the page for an overlay a key opened)
-// Every overlay is opened by its real control, with no unhiding. The spec fails only when an overlay does not open; it decides nothing about the answers.
+//   back    after Escape the focus is on what opened it (the button, or the page for an overlay a key or an event opened)
+// It was a report (#856) before it was a gate: the numbers were 2 of 11 overlays with all four.
 
 const yamlPath = path.join(workspace, "probe.yaml");
-type Row = { overlay: string; opener: string; in: boolean; tab: boolean; esc: boolean; back: boolean; after: string };
-const rows: Row[] = [];
 
 async function describeFocus(page: Page): Promise<string> {
   return page.evaluate(() => {
@@ -22,6 +20,37 @@ async function describeFocus(page: Page): Promise<string> {
   });
 }
 
+// The element that must have the focus when each overlay opens. For the questions with a destructive or sending answer it is the safe one (Cancel, Keep editing),
+// so that Enter or Space on a freshly opened dialog never allows, sends, discards or wipes.
+const FIRST: Record<string, string> = {
+  "#help-overlay": "#btn-help-close",
+  "#settings-overlay": "#btn-settings-close",
+  "#wifi-overlay": "#btn-wifi-close",
+  "#api-key-overlay": "#api-key-input",
+  "#fix-preview-overlay": "#btn-fix-preview-cancel",
+  "#explain-preview-overlay": "#btn-explain-preview-cancel",
+  "#ai-preview-overlay": "#btn-ai-preview-cancel",
+  "#save-as-overlay": "#save-as-name",
+  "#discard-overlay": "#btn-discard-cancel", // Keep editing, never Discard changes
+  "#confirm-overlay": "#btn-confirm-cancel", // never Clear data
+  "#send-allow-overlay": "#btn-send-allow-cancel", // never Allow and send
+};
+
+// Each overlay is a named dialog to assistive technology: its role and its accessible name. The questions with a sending, discarding or wiping answer are alert dialogs.
+const DIALOG: Record<string, { role: "dialog" | "alertdialog"; name: RegExp }> = {
+  "#help-overlay": { role: "dialog", name: /Keyboard shortcuts/ },
+  "#settings-overlay": { role: "dialog", name: /Workspace settings/ },
+  "#wifi-overlay": { role: "dialog", name: /WiFi devices/ },
+  "#api-key-overlay": { role: "dialog", name: /Anthropic API key/ },
+  "#fix-preview-overlay": { role: "dialog", name: /Before Suggest a fix/ },
+  "#explain-preview-overlay": { role: "dialog", name: /Before Explain/ },
+  "#ai-preview-overlay": { role: "dialog", name: /Before this message/ },
+  "#save-as-overlay": { role: "dialog", name: /Save as a new file/ },
+  "#discard-overlay": { role: "alertdialog", name: /Discard unsaved changes/ },
+  "#confirm-overlay": { role: "alertdialog", name: /Clear app data/ },
+  "#send-allow-overlay": { role: "alertdialog", name: /Send requests/ },
+};
+
 async function measure(page: Page, overlay: string, opener: string, open: () => Promise<void>) {
   const box = page.locator(overlay);
   const inside = () => page.evaluate((sel) => !!document.querySelector(sel)?.contains(document.activeElement), overlay);
@@ -30,6 +59,11 @@ async function measure(page: Page, overlay: string, opener: string, open: () => 
   await open();
   await expect(box, `${overlay} did not open`).toBeVisible();
   const focusIn = await inside();
+  const d = DIALOG[overlay];
+  await expect(page.getByRole(d.role, { name: d.name }), `${overlay.slice(1)}: is a ${d.role} named ${d.name}`).toBeVisible();
+  expect(await page.getByRole(d.role, { name: d.name }).getAttribute("aria-modal"), `${overlay.slice(1)}: aria-modal`).toBe("true");
+  const first = FIRST[overlay];
+  expect(await page.evaluate((sel) => document.activeElement === document.querySelector(sel), first), `${overlay.slice(1)}: the focus starts on ${first}`).toBe(true);
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
   const closes = await box.isHidden();
@@ -49,10 +83,14 @@ async function measure(page: Page, overlay: string, opener: string, open: () => 
     await page.keyboard.press("Shift+Tab");
     if (!(await inside())) tabStays = false;
   }
-  rows.push({ overlay: overlay.slice(1), opener, in: focusIn, tab: tabStays, esc: closes, back, after: closes ? after : "(still open)" });
+  const name = overlay.slice(1);
+  expect(focusIn, `${name}: the focus starts inside`).toBe(true);
+  expect(tabStays, `${name}: Tab stays inside`).toBe(true);
+  expect(closes, `${name}: Escape closes it`).toBe(true);
+  expect(back, `${name}: the focus goes back to ${opener} (it is on ${after})`).toBe(true);
 }
 
-test.describe("Keyboard report (11 overlays x 4 properties; report only)", () => {
+test.describe("Keyboard behaviour of the 11 overlays (4 properties each)", () => {
   test.skip(!workspace, "STUDIO_WORKSPACE is not set (run scripts/studio-e2e-web.sh)");
   let original = "";
   test.beforeEach(() => {
@@ -60,17 +98,6 @@ test.describe("Keyboard report (11 overlays x 4 properties; report only)", () =>
     if (!original.endsWith("\n")) original += "\n";
   });
   test.afterEach(() => fs.writeFileSync(yamlPath, original));
-  test.afterAll(async ({}, testInfo) => {
-    const yn = (b: boolean) => (b ? "yes" : "NO ");
-    const lines = rows.map((r) => `KBD ${r.overlay.padEnd(22)} opener ${r.opener.padEnd(22)} in=${yn(r.in)} tab=${yn(r.tab)} esc=${yn(r.esc)} back=${yn(r.back)} (focus after: ${r.after})`);
-    const full = rows.filter((r) => r.in && r.tab && r.esc && r.back).length;
-    console.log(["KBD REPORT: " + `${full} of ${rows.length} overlays have all four`, ...lines].join("\n"));
-    const file = testInfo.outputPath("keyboard-report.json");
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify(rows, null, 1));
-    await testInfo.attach("keyboard-report.json", { path: file, contentType: "application/json" });
-  });
-
   const aiOn = () => fs.writeFileSync(yamlPath, `${original}ai:\n  provider: local\n  endpoint: http://127.0.0.1:9/v1\n  model: report-model\nstudio:\n  ai_context:\n    run_results: true\n`);
 
   test("kbd-01 help (the ? key)", async ({ page }) => {
@@ -181,5 +208,19 @@ test.describe("Keyboard report (11 overlays x 4 properties; report only)", () =>
     await measure(page, "#send-allow-overlay", "#btn-send", async () => {
       await page.click("#btn-send");
     });
+  });
+
+  test("kbd-12 a key typed in the API-key form and not saved does not stay in the page after Escape or Cancel", async ({ page }) => {
+    await openStudio(page);
+    await page.locator("body").press("ControlOrMeta+Shift+a");
+    for (const close of ["Escape", "Cancel"]) {
+      await page.click("#btn-chat-key");
+      await expect(page.locator("#api-key-overlay")).toBeVisible();
+      await page.fill("#api-key-input", "sk-ant-typed-and-not-saved");
+      if (close === "Escape") await page.keyboard.press("Escape");
+      else await page.click("#btn-api-key-close");
+      await expect(page.locator("#api-key-overlay")).toBeHidden();
+      expect(await page.inputValue("#api-key-input"), `after ${close}`).toBe("");
+    }
   });
 });

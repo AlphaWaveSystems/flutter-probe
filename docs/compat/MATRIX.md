@@ -44,6 +44,8 @@ decided `is checked` for a radio by comparing the radio's `value` with its own `
 the radio's own group value when it has one and otherwise the nearest `RadioGroup` above it (`Radio`, `RadioListTile`, `CupertinoRadio`). The row above is the result with the fixed agent on a build by each Flutter version
 (`selection.probe`, 5 of 5 on emulator-5600); an app that still runs an agent from before the fix keeps the old answer until it takes a `probe_agent` release with the fix.
 
+- **`is checked` on a wrapper holding several checkables answers from the first in tree order** (issue #865): a `Row` with a checked and an unchecked `Checkbox` reads as the first. Put the id on the control to check.
+
 ### Text input (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=textinput`, `probe-tests/widgets/textinput.probe`)
 
 | Widget (fixture id) | find (`#id`) | type | clear | read | Result |
@@ -77,13 +79,15 @@ the radio's own group value when it has one and otherwise the nearest `RadioGrou
 - **A tap on a disabled button is not an error.** The step passes. Whether the tap reached the button is not measured: the fixture's disabled button has no handler, so its count cannot go up and "stays 0" proves nothing about the tap. A test that wants to know a button is disabled must say `see "..." is disabled`; `tap` will not tell it.
 - **A held press on a button with no long-press handler ends as a tap** (`long press "Press elevated"` makes `Elevated: 1`; measured on Flutter 3.44.8 and 3.50.0). This is Flutter's own behavior (the tap recogniser has no timeout), not a fault of the step; the suite pins it so a change in either shows up.
 - **Tooltips are selectors**: an icon button or a floating action button, which show no text, are found by their tooltip text, the same way they are by `#id`.
+- **`is enabled` / `is disabled` on a wrapper read the control it holds** (issue #860, agent change): with the id on a keyed `SizedBox`, a `KeyedSubtree` or a `Semantics(identifier:)` around a disabled button, `is enabled` used to pass. The agent now reads the target, then the controls it holds (the first on each branch), then its ancestors; held controls that agree give the answer, controls that disagree refuse ("holds 2 controls that disagree"). Measured in agent widget tests (the fixture puts its ids on the controls themselves, so its suites did not hit this). Only the controls the agent reads count: a disabled `Radio`, `CupertinoButton`, `Slider` or `DropdownButton` still passes `is enabled` (issue #864).
+- **A button inside an `IgnorePointer` gets no tap, and the step says so** (issue #842, agent change): before, `tap` passed with no warning while nothing happened, so even `--fail-on-warning` passed. Now the step prints `tap target ... is inside an IgnorePointer, so it receives no taps` when the `IgnorePointer` cuts off a handler of the target's own (a button's own `InkWell`), and `--fail-on-warning` fails it. A passive label inside an `IgnorePointer` under a parent that takes the tap (a `ListTile` whose title is wrapped) gets the tap and no such message. Measured in agent widget tests and with the `layout` screen of the Layout family on both named devices. Not handled: a `GestureDetector` around an `IgnorePointer` around a passive text gets no tap and nothing warns (noted in issue #842).
 
 Not covered by the screen: `ButtonBar` (deprecated in the catalog), `ToggleButtons` and `SegmentedButton` (selection), `PopupMenuButton` and `DropdownButton` (pickers and menus), a button inside a dialog or a list, a double tap, a button that scrolls into view, and a button under an overlay. The 8 variants of the suite that must fail
 (`probe-tests/negative/buttons.probe.expect-fail`) were run: all 8 fail with the message that says why (a count one too many, `is disabled` on an enabled button and `is enabled` on a disabled one, the disabled button's counter expected above 0, a held press taken for no tap, a label that is not on the screen, a tap taken for a long press, one button's tooltip finding another).
 
 ### Navigation (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=navigation`, `probe-tests/widgets/navigation.probe`)
 
-Measured on Flutter 3.44.8, on `Compat-Pixel-API35` (Android 15, API 35, `emulator-5590`) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5, simulator `A57AEE67-3473-4C20-BE25-8847C2A9D6BE`), 4 of 4 three times on each; the 5 variants that must fail (`probe-tests/negative/navigation.probe.expect-fail`) failed, 5 of 5 on each, each with the message its comment states.
+Measured on Flutter 3.44.8, on `Compat-Pixel-API35` (Android 15, API 35) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5), 4 of 4 three times on each; the 5 variants that must fail (`probe-tests/negative/navigation.probe.expect-fail`) failed, 5 of 5 on each, each with the message its comment states.
 
 | Widget or behavior (fixture id) | find | tap | read | Result |
 |---|---|---|---|---|
@@ -100,7 +104,7 @@ Measured on Flutter 3.44.8, on `Compat-Pixel-API35` (Android 15, API 35, `emulat
 Not covered by the screen: `NavigationBar`, `TabBar`, `Drawer`, a route that is not opaque (a dialog, a popup menu, a bottom sheet: the page under it stays matched by design; item 8 of `NEXT.md`), named routes and `go_router`, the Android system back key and the iOS edge swipe (`go back` pops in the app, it does not press either), a nested `Navigator`, and Cupertino routes (item 10 of `NEXT.md`). Flutter 3.50.0 was not run for this family.
 ### Text and display: text (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=display`, `probe-tests/widgets/display.probe`)
 
-Measured on Flutter 3.44.8, on `Compat-Pixel-API35` (Android 15, API 35, `emulator-5590`) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5, simulator `A57AEE67-3473-4C20-BE25-8847C2A9D6BE`): with the wait below, 5 of 5 tests in 10 of 10 runs on Android and in 5 of 5 runs on iOS (iOS also passed 3 of 3 before the wait was added); the 9 variants that must fail (`probe-tests/negative/display.probe.expect-fail`) failed, 9 of 9 on each, each with the message its comment states.
+Measured on Flutter 3.44.8, on `Compat-Pixel-API35` (Android 15, API 35) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5): with the wait below, 5 of 5 tests in 10 of 10 runs on Android and in 5 of 5 runs on iOS (iOS also passed 3 of 3 before the wait was added); the 9 variants that must fail (`probe-tests/negative/display.probe.expect-fail`) failed, 9 of 9 on each, each with the message its comment states.
 
 | Widget (fixture id) | find | read | Result |
 |---|---|---|---|
@@ -118,7 +122,7 @@ Not covered by the screen: `SelectableText`, `DefaultTextStyle` and `Text` insid
 
 ### Text and display: widgets without text (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=display`, `probe-tests/widgets/display.probe`)
 
-Measured on Flutter 3.44.8 with the agent from main at `edb0fce` (it waits for a laid-out view, issue #793), on `Compat-Pixel-API35` (Android 15, API 35, `emulator-5590`) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5, simulator `A57AEE67-3473-4C20-BE25-8847C2A9D6BE`): the suite (8 tests, the text tests above included) passed 3 of 3 runs on each device, and the 12 variants that must fail (`probe-tests/negative/display.probe.expect-fail`) failed on both, each with the message in its comment. An exploratory run of 16 single steps gave the same result on both devices. No text on the screen holds "Favorite", "Logo" or "AB" (the logo's state text is `Taps: N`), so each match below comes from the widget itself. With the fix for issue #818 the suite has 9 tests (the labels are read) and 13 variants that must fail.
+Measured on Flutter 3.44.8 with the agent from main at `edb0fce` (it waits for a laid-out view, issue #793), on `Compat-Pixel-API35` (Android 15, API 35) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5): the suite (8 tests, the text tests above included) passed 3 of 3 runs on each device, and the 12 variants that must fail (`probe-tests/negative/display.probe.expect-fail`) failed on both, each with the message in its comment. An exploratory run of 16 single steps gave the same result on both devices. No text on the screen holds "Favorite", "Logo" or "AB" (the logo's state text is `Taps: N`), so each match below comes from the widget itself. With the fix for issue #818 the suite has 9 tests (the labels are read) and 13 variants that must fail.
 
 | Widget (fixture id) | find | tap | read | Result |
 |---|---|---|---|---|
@@ -136,7 +140,7 @@ Not covered by the screen: `Image.network` and `Image.asset` (loading, an error 
 
 ### Lists and scrolling (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=lists`, `probe-tests/widgets/lists.probe`)
 
-Measured on Flutter 3.44.8 with the agent from main (it waits for a laid-out view, issue #793, and counts a `Text` once, issue #800), on `Compat-Pixel-API35` (Android 15, API 35, `emulator-5590`) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5, simulator `A57AEE67-3473-4C20-BE25-8847C2A9D6BE`): the suite (13 tests) passed 3 of 3 runs on `Compat-iPhone`; on `Compat-Pixel-API35`, 3 of the 4 runs whose output was kept passed 13 of 13 and the 4th failed one test at `restart the app` with `agent not reachable within 30s` before the test ran (issue #823); three earlier runs whose output was not captured are not counted. The 10 variants that must fail failed on both devices, each with the message in its comment. Some runs before this one failed a test at `restart the app` with `agent not reachable within <token_read_timeout>` (issue #823: about 1 restart in 25 overall, on builds by both Flutter versions, cause unknown, load not measured); in one such run on `Compat-Pixel-API35` I observed a load average of about 49 at the end of the run, an observation, not a measured cause.
+Measured on Flutter 3.44.8 with the agent from main (it waits for a laid-out view, issue #793, and counts a `Text` once, issue #800), on `Compat-Pixel-API35` (Android 15, API 35) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5): the suite (13 tests) passed 3 of 3 runs on `Compat-iPhone`; on `Compat-Pixel-API35`, 3 of the 4 runs whose output was kept passed 13 of 13 and the 4th failed one test at `restart the app` with `agent not reachable within 30s` before the test ran (issue #823); three earlier runs whose output was not captured are not counted. The 10 variants that must fail failed on both devices, each with the message in its comment. Some runs before this one failed a test at `restart the app` with `agent not reachable within <token_read_timeout>` (issue #823: about 1 restart in 25 overall, on builds by both Flutter versions, cause unknown, load not measured); in one such run on `Compat-Pixel-API35` I observed a load average of about 49 at the end of the run, an observation, not a measured cause.
 
 | Widget (fixture id) | find | tap | scroll | read | Result |
 |---|---|---|---|---|---|
@@ -184,6 +188,24 @@ Also measured on two named devices, with Flutter 3.44.8 and the agent from main:
 
 Not covered by the screen: iOS (a Cupertino dialog and sheet were run on Android only), a dialog with `barrierDismissible: false`, a dialog with a text field, a scrolling dialog, `showDatePicker` and `showTimePicker`, a persistent bottom sheet, a floating or queued snack bar, `PopupMenuButton`, `Drawer`, and native system dialogs (see `tools/system-dialogs`). The 9 variants of the suite that must fail
 (`probe-tests/negative/dialogs.probe.expect-fail`) were run: all 9 fail at their own step with the message in their comment (a snack bar and its action before `Save`, a dialog seen after Cancel, `tap "Delete"` taken for the button, a tap on a button that the dialog body covers counted, the wrong state, a sheet seen after an option, a state before its tap, the Cancel button after a tap on the barrier).
+
+### Progress indicators (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=progress`, `probe-tests/widgets/progress.probe`)
+
+Measured on Flutter 3.44.8 with the agent from main, on `Compat-Pixel-API35` (Android 15, API 35) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5): the suite (4 tests) passed 3 of 3 runs on each device, and the 3 variants that must fail (`probe-tests/negative/progress.probe.expect-fail`) failed on both, each with the message in its comment; no restart failure (issue #823). The screen is its own family (`progress`) rather than part of `display`, so the display suite and its wait after a restart stay as they are.
+
+| Widget (fixture id) | Steps | Result |
+|---|---|---|
+| an indeterminate `CircularProgressIndicator` shown for 3 seconds after "Load", then "Loaded" (`wf_spinner`, `wf_loaded`) | `see #wf_spinner` while it runs, `wait until #wf_spinner disappears`, then `see "Loaded"`; or `wait until "Loaded" appears` | pass |
+| an indeterminate `CircularProgressIndicator` that never goes away (`wf_forever`) | `tap`, `see` and `see #wf_linear` while it animates | pass: an animation that never ends does not stall the steps |
+| the same, `wait until #wf_forever disappears within 5 seconds` | the variant N2 | fails with `Timed out waiting for "#wf_forever" to disappear` and the visible texts, after about 5 seconds |
+| a `LinearProgressIndicator` with `value: 0.4` (`wf_linear`) | `see #wf_linear` | pass (found by id; its value is not read) |
+
+**Findings.**
+- **Waiting for a spinner works both ways:** for the spinner to disappear, or for the result to appear. `see "Loaded"` straight after the tap fails (N1), as it should.
+- **An animation that never ends does not block the agent:** the steps after it answer at once. (The agent waits for the screen to settle after an action for at most 10 seconds and does not count an app's animations, `ProbeSync.waitForSettled`.)
+- **A wait for something that never happens ends with a clear timeout** that names the target and lists what is on screen.
+
+Not covered by the screen: reading a progress bar's value, `RefreshProgressIndicator` (the spinner of a pull to refresh; the screen has only `CircularProgressIndicator` and `LinearProgressIndicator`), `CupertinoActivityIndicator`, `RefreshIndicator` (pull to refresh), a spinner inside a button, a spinner on a route that is still being pushed. Flutter 3.50.0 was not run for this family.
 
 ### WebView content (`native-test-apps/flutter-webview`, `probe-tests/webview.probe`)
 

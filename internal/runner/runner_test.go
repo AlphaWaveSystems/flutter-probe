@@ -173,7 +173,7 @@ with examples:
 }
 
 func TestParseIntegration_RecipeFile(t *testing.T) {
-	src := `recipe "log in as" (email, password)
+	src := `recipe "sign in as" (email, password)
   open the app
   tap "Sign In"
   type "<email>" into the "Email" field

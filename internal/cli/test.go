@@ -52,7 +52,6 @@ Resolution order: CLI flag > probe.yaml > built-in default.`,
 	Example: `  probe test                                # run all tests in ./tests/
   probe test tests/login.probe              # run one file
   probe test --tag smoke                    # run tests tagged @smoke
-  probe test --watch                        # re-run on file changes
   probe test --format junit -o results.xml  # JUnit output
   probe test --port 9999                    # custom agent port
   probe test --token-timeout 60s            # longer token wait (slow CI)
@@ -74,9 +73,27 @@ Resolution order: CLI flag > probe.yaml > built-in default.`,
 // errTestFailed (which the runner has already reported in detail) is printed
 // before being returned — see the SilenceErrors comment above.
 func runTestsAndReportError(cmd *cobra.Command, args []string) error {
-	err := runTests(cmd, args)
+	var err error
+	if refused := refuseWatch(cmd); refused != nil {
+		err = refused
+	} else {
+		err = runTests(cmd, args)
+	}
 	reportIfNotTestFailure(cmd.ErrOrStderr(), err)
 	return err
+}
+
+// errWatchNotImplemented is what `probe test --watch` ends with. The flag was registered and documented ("re-run
+// tests automatically on file changes") but nothing ever read it, so a run with it behaved as a plain single run.
+var errWatchNotImplemented = errors.New("--watch is not implemented: probe test runs once and exits. " +
+	"Start the command again from a file watcher of your own, or run the file from Studio")
+
+// refuseWatch returns errWatchNotImplemented when --watch (-w) was given, before anything touches a device.
+func refuseWatch(cmd *cobra.Command) error {
+	if w, _ := cmd.Flags().GetBool("watch"); w {
+		return errWatchNotImplemented
+	}
+	return nil
 }
 
 // reportIfNotTestFailure prints err to w, unless it's nil or errTestFailed
@@ -94,7 +111,8 @@ func init() {
 
 	// Test selection & output
 	f.StringP("tag", "t", "", "run only tests matching this tag (e.g. @smoke, @critical)")
-	f.BoolP("watch", "w", false, "watch mode — re-run tests automatically on file changes")
+	f.BoolP("watch", "w", false, "not implemented: probe test refuses it (it used to be accepted and ignored)")
+	_ = f.MarkHidden("watch")
 	f.String("shard", "", `run a subset of test files, format: N/M (e.g. "1/3" runs shard 1 of 3)`)
 	f.String("shard-root", "", "directory a shard's file keys are taken relative to (default: the --config directory, or PROBE_SHARD_ROOT); give the same one in every shard job")
 	f.String("format", "terminal", "output format: terminal | junit | json")
@@ -179,7 +197,8 @@ func init() {
 	f.Int("visual-pixel-delta", 0, "per-pixel color distance threshold 0–255 (default: 8)")
 
 	// Cloud integration
-	f.Bool("cloud", false, "upload test results to FlutterProbe Cloud after run")
+	f.Bool("cloud", false, "not implemented: probe test refuses it (it used to be accepted and ignored; a configured cloud token and URL upload the results)")
+	_ = f.MarkHidden("cloud")
 	f.String("cloud-token", "", "API key for FlutterProbe Cloud authentication")
 	f.String("cloud-url", "", "cloud API base URL (must be set via this flag or cloud.url in probe.yaml)")
 
@@ -254,7 +273,24 @@ func localeDeviceContext(ctx context.Context, dm *device.Manager, cfg *config.Co
 // buildCompositeRunnerFn is buildCompositeRunner. It is a variable so a test can see the clear gate a composite run is given.
 var buildCompositeRunnerFn = buildCompositeRunner
 
+// errCloudNotImplemented is what `probe test --cloud` ends with. The flag was registered with the help text "upload
+// test results to FlutterProbe Cloud after run" but nothing read it: the upload is decided by a configured cloud token
+// and URL (--cloud-token, --cloud-url or cloud.token, cloud.url), never by this flag.
+var errCloudNotImplemented = errors.New("--cloud is not implemented: it never started an upload. " +
+	"Results are uploaded when a cloud token and URL are configured (--cloud-token and --cloud-url, or cloud.token and cloud.url in probe.yaml)")
+
+// refuseCloudFlag returns errCloudNotImplemented when --cloud was given, before anything touches a device.
+func refuseCloudFlag(cmd *cobra.Command) error {
+	if on, _ := cmd.Flags().GetBool("cloud"); on {
+		return errCloudNotImplemented
+	}
+	return nil
+}
+
 func runTests(cmd *cobra.Command, args []string) (retErr error) {
+	if err := refuseCloudFlag(cmd); err != nil {
+		return err
+	}
 	// probe_version in probe.yaml must be met by the running CLI before anything starts (see checkProbeVersion).
 	pinCfg, err := loadConfig(cmd)
 	if err != nil {
