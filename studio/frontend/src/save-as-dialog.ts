@@ -15,7 +15,9 @@ function close(name: string | null): void {
   document.removeEventListener("keydown", trapKey, true);
   document.removeEventListener("focusin", keepFocus, true);
   $("save-as-overlay").hidden = true;
-  if (opener instanceof HTMLElement) opener.focus();
+  // After the caller's own code has run: the button that opened the dialog is disabled while it is open and enabled again when the answer has been handled,
+  // and a disabled button cannot take the focus.
+  if (opener instanceof HTMLElement) setTimeout(() => opener.focus(), 0);
   resolve(name);
 }
 
@@ -58,10 +60,10 @@ function keepFocus(ev: FocusEvent): void {
 }
 
 /** Asks for the name of a new file. Resolves with the name (with .probe, checked against `existing`), or null for every other way out. */
-export function askSaveAsName(defaultName: string, existing: readonly string[], folder: string): Promise<string | null> {
+export function askSaveAsName(defaultName: string, existing: readonly string[], folder: string, returnTo: HTMLElement | null = null): Promise<string | null> {
   if (open) return Promise.resolve(null);
   return new Promise((resolve) => {
-    open = { resolve, existing, opener: document.activeElement };
+    open = { resolve, existing, opener: returnTo ?? document.activeElement };
     const input = $("save-as-name") as HTMLInputElement;
     input.value = defaultName;
     input.removeAttribute("aria-invalid");

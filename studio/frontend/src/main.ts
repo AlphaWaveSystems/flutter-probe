@@ -13,6 +13,7 @@ import { FixSession, REPLACE_NOTE, STALE_VERDICT_NOTE, canOfferReplace, fixCardM
 import { initNetworkPanel, resetNetworkPanel } from "./network-panel";
 import { renderProblems } from "./problems-panel";
 import { initConfirmDialog } from "./confirm-dialog";
+import { trapFocus } from "./modal-focus";
 import { recordedScript, recordingHeader } from "./recording-script";
 import { askDiscard, initDiscardDialog } from "./discard-dialog";
 import { askSaveAsName, initSaveAsDialog } from "./save-as-dialog";
@@ -258,6 +259,7 @@ let currentDir = "tests";
 // settings overlay and the chat line read the same file. currentDir moves when the file pane is browsed; this does not.
 let workspaceRoot = "";
 let dirty = false;
+let saveAsOpener: HTMLElement | null = null;
 let saving = false; // a new file is being written (Save as): no second Save may list the folder before the write has landed
 // First-run guidance: nothing is said while the workspace is still being opened at start-up, and the device list is not judged empty
 // before its first listing has arrived.
@@ -504,6 +506,7 @@ async function saveAs(): Promise<void> {
     toast("Saving: wait until the file is written.", "info", 2500);
     return;
   }
+  saveAsOpener = document.activeElement as HTMLElement | null; // taken before Save is disabled below: a disabled button gives up the focus, and this is where it goes back to
   saving = true;
   setDirty(dirty); // disables Save while the name is asked and the file is written
   try {
@@ -529,7 +532,7 @@ async function saveAsInner(): Promise<void> {
     return;
   }
   const typed = $("editor-filename").textContent === "recorded.probe" ? "recorded.probe" : "untitled.probe";
-  const name = await askSaveAsName(typed, existing, dir);
+  const name = await askSaveAsName(typed, existing, dir, saveAsOpener);
   if (name === null) return;
   const path = `${dir.replace(/\/+$/, "")}/${name}`;
   const content = model.getValue();
@@ -579,6 +582,8 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "?" && !mod) {
     // A `?` typed into a field is text: the editor, the chat input, the send panel's fields, every input that takes text (typing-target.ts).
     if (document.activeElement?.closest("#editor") || isTextEntry(document.activeElement as HTMLElement | null)) return;
+    // The help card is for the window, not for a question that is open (a preview before sending, the settings): over one it would be a second layer for Escape to undo.
+    if (document.querySelector(".overlay:not([hidden])")) return;
     e.preventDefault();
     openHelpOverlay();
     return;
@@ -625,11 +630,26 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+// The focus handling of the overlays that are not a question with a Cancel: Tab stays inside, Escape closes, the focus goes back to what opened it (modal-focus.ts).
+// Each overlay's release is kept here and called by its close function, which is also what the global Escape handler and the close button call.
+const overlayReleases = new Map<string, () => void>();
+function holdFocus(id: string, initialId: string, onEscape: () => void): void {
+  overlayReleases.get(id)?.();
+  overlayReleases.set(id, trapFocus($(id), { initial: $(initialId), onEscape }));
+}
+function releaseFocus(id: string): void {
+  const release = overlayReleases.get(id);
+  overlayReleases.delete(id);
+  release?.();
+}
+
 function openHelpOverlay() {
   $("help-overlay").hidden = false;
+  holdFocus("help-overlay", "btn-help-close", closeHelpOverlay);
 }
 function closeHelpOverlay() {
   $("help-overlay").hidden = true;
+  releaseFocus("help-overlay");
 }
 $("btn-help-close").addEventListener("click", closeHelpOverlay);
 $("help-overlay").addEventListener("click", (e) => {
@@ -644,6 +664,7 @@ async function openSettingsOverlay() {
   const noWorkspace = $("settings-no-workspace") as HTMLElement;
   const form = $("settings-form") as HTMLFormElement;
   overlay.hidden = false;
+  holdFocus("settings-overlay", "btn-settings-close", closeSettingsOverlay);
 
   if (!workspaceRoot) {
     noWorkspace.hidden = false;
@@ -707,6 +728,7 @@ $("settings-clear-data-sim").addEventListener("change", async (e) => {
 
 function closeSettingsOverlay() {
   $("settings-overlay").hidden = true;
+  releaseFocus("settings-overlay");
 }
 
 $("btn-settings").addEventListener("click", openSettingsOverlay);
@@ -1023,27 +1045,20 @@ function confirmExplainSend(p: ExplainPreview): Promise<boolean> {
   $("explain-preview-text").textContent = p.text;
   overlay.hidden = false;
   return new Promise((resolve) => {
+    // Cancel has the focus (the safe choice); Tab goes round the text, Cancel and Send; Escape is Cancel; the focus goes back to where it was
+    const release = trapFocus(overlay, { initial: cancel, onEscape: () => finish(false), returnTo: $("btn-explain") });
     const finish = (ok: boolean) => {
       overlay.hidden = true;
+      release();
       send.removeEventListener("click", onSend);
       cancel.removeEventListener("click", onCancel);
-      document.removeEventListener("keydown", onKey);
       dismissExplainConfirm = null;
       resolve(ok);
     };
     const onSend = () => finish(true);
     const onCancel = () => finish(false);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") finish(false); // Escape is Cancel: nothing is sent
-      if (e.key === "Tab") {
-        // the dialog is modal: Tab stays between its two buttons
-        e.preventDefault();
-        (document.activeElement === cancel ? send : cancel).focus();
-      }
-    };
     send.addEventListener("click", onSend);
     cancel.addEventListener("click", onCancel);
-    document.addEventListener("keydown", onKey);
     dismissExplainConfirm = () => finish(false);
   });
 }
@@ -1333,27 +1348,22 @@ function confirmFixSend(p: FixPreview): Promise<boolean> {
   const cancel = $("btn-fix-preview-cancel");
   $("fix-preview-note").textContent = fixPreviewNote(p.hosted, p.attempt, p.maxAttempts);
   $("fix-preview-text").textContent = p.text;
-  const opener = document.activeElement as HTMLElement | null;
   overlay.hidden = false;
-  cancel.focus(); // the safe choice has the focus: Enter does not send
   return new Promise((resolve) => {
+    // the safe choice has the focus (Enter does not send); Tab goes round the text, Cancel and Send; Escape is Cancel; the focus goes back to where it was
+    const release = trapFocus(overlay, { initial: cancel, onEscape: () => finish(false), returnTo: $("btn-fix") });
     const finish = (ok: boolean) => {
       overlay.hidden = true;
-      opener?.focus?.(); // the focus goes back to where it was
+      release();
       send.removeEventListener("click", onSend);
       cancel.removeEventListener("click", onCancel);
-      document.removeEventListener("keydown", onKey);
       dismissFixConfirm = null;
       resolve(ok);
     };
     const onSend = () => finish(true);
     const onCancel = () => finish(false);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") finish(false); // Escape is Cancel: nothing is sent
-    };
     send.addEventListener("click", onSend);
     cancel.addEventListener("click", onCancel);
-    document.addEventListener("keydown", onKey);
     dismissFixConfirm = () => finish(false);
   });
 }
@@ -1395,8 +1405,11 @@ function confirmFirstChatSend(preview: string): Promise<boolean> {
   $("ai-preview-text").textContent = preview;
   overlay.hidden = false;
   return new Promise((resolve) => {
+    // Cancel has the focus (the safe choice); Tab goes round the text, Cancel and Send; Escape is Cancel; the focus goes back to where it was
+    const release = trapFocus(overlay, { initial: cancel, onEscape: () => finish(false), returnTo: $("chat-input"), fallback: $("chat-pane") });
     const finish = (ok: boolean) => {
       overlay.hidden = true;
+      release();
       send.removeEventListener("click", onSend);
       cancel.removeEventListener("click", onCancel);
       resolve(ok);
@@ -1503,11 +1516,13 @@ function openWiFiOverlay() {
   $("wifi-manual-msg").hidden = true;
   restoreManualWiFi();
   $("wifi-overlay").hidden = false;
+  holdFocus("wifi-overlay", "btn-wifi-close", closeWiFiOverlay);
   StartWiFiDiscovery().catch((err) => toast(`mDNS browse failed: ${err}`, "error"));
 }
 
 function closeWiFiOverlay() {
   $("wifi-overlay").hidden = true;
+  releaseFocus("wifi-overlay");
   StopWiFiDiscovery();
 }
 
@@ -2651,10 +2666,12 @@ async function openApiKeyOverlay() {
   }
   input.placeholder = saved ? "A key is saved. Type a new key to replace it." : "sk-ant-…";
   $("api-key-overlay").hidden = false;
+  holdFocus("api-key-overlay", "api-key-input", closeApiKeyOverlay); // the field first: the person came to type a key
 }
 
 function closeApiKeyOverlay() {
   $("api-key-overlay").hidden = true;
+  releaseFocus("api-key-overlay");
 }
 
 $("btn-api-key-close").addEventListener("click", closeApiKeyOverlay);
