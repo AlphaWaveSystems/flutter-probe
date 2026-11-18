@@ -36,7 +36,7 @@ FlutterProbe uses a split architecture: a Go CLI runs on the host machine and se
 test "user grants camera permission and takes photo"
   open the app
   tap "Take Photo"
-  grant permission camera
+  allow permission "camera"
   see "Photo Preview"
 ```
 
