@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -162,8 +163,10 @@ func (s *automationServer) authorize(r *http.Request) (int, string) {
 	if f := r.Header.Get("Sec-Fetch-Site"); f == "cross-site" || f == "same-site" {
 		return http.StatusForbidden, "browser requests are not allowed"
 	}
-	got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) != 1 {
+	// The scheme is part of the header: a bare token, with no "Bearer ", is not the credential the endpoint documents and is refused.
+	header := r.Header.Get("Authorization")
+	got, hasScheme := strings.CutPrefix(header, "Bearer ")
+	if !hasScheme || got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) != 1 {
 		return http.StatusUnauthorized, "missing or wrong token"
 	}
 	return 0, ""
@@ -178,8 +181,13 @@ func (s *automationServer) handleRPC(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "POST only"})
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 	if err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) { // a body over the limit is refused as such, not cut and judged as whatever JSON is left
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "the request body is over 1 MiB"})
+			return
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}

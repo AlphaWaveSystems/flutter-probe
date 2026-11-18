@@ -1,0 +1,50 @@
+# Needs the layout build: flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=layout (see the README).
+# What each test shows is also in docs/compat/MATRIX.md: a matrix cell is set only from a test that ran.
+# Widgets a person cannot see or cannot tap. Each button counts its taps in the state line, so a test shows whether a tap arrived. Some
+# tests pin what the agent does today where it differs from what a person sees: those are findings, marked FINDING.
+
+before each test
+  restart the app
+  # the last element of the screen with an id: right after a restart the screen can still be being built (issue #793)
+  wait until #wf_layout_state appears
+
+# FINDING: an Opacity(0) button is invisible to a person, but `see` finds it and `tap` presses it (Flutter hit-tests a transparent
+# widget, so a person's tap on that spot would press it too).
+test "an Opacity(0) button is seen and tapped"
+  see "Faded button"
+  tap "Faded button"
+  see "Faded: 1"
+
+test "a Visibility(visible: false) widget is not seen, kept in the tree or not, and neither is an Offstage one"
+  see "Faded: 0"
+  don't see "Kept hidden"
+  don't see "Gone text"
+  don't see "Offstage text"
+
+# FINDING: an IgnorePointer button is seen, and `tap` passes while the tap does nothing. Before the fix for issue #842 there was no
+# warning at all; with it the step prints `is inside an IgnorePointer, so it receives no taps` (and fails under --fail-on-warning).
+test "a tap on an IgnorePointer button passes and does nothing"
+  see "Ignored button"
+  tap "Ignored button"
+  see "Ignored: 0"
+
+# An AbsorbPointer button: the tap does nothing; the agent prints a warning that the target is covered.
+test "a tap on an AbsorbPointer button does nothing"
+  see "Absorbed button"
+  tap "Absorbed button"
+  see "Absorbed: 0"
+
+# FINDING: a button fully covered in a Stack is seen; `tap` lands on what is on top, as a person's tap would. The cover counts it, so
+# the screen changes and the agent gives no warning.
+test "a tap on a covered button lands on the cover"
+  see "Covered button"
+  tap "Covered button"
+  see "Covered: 0"
+  see "Cover: 1"
+
+test "every reachable element is found by its id"
+  see #wf_faded
+  see #wf_ignored
+  see #wf_absorbed
+  see #wf_covered
+  see #wf_cover

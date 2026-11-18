@@ -6,6 +6,7 @@ import { AllowHost, BuildCallStep, CheckTarget, SendRequest } from "../wailsjs/g
 import { main } from "../wailsjs/go/models";
 import { allowText, errorText, parseHeaders, savedSummary, summarize, type SendResultLike, type TargetInfo } from "./send";
 import { bodyView, type NetBody, type NetHeader } from "./network";
+import { trapFocus } from "./modal-focus";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => document.getElementById(id) as T;
 
@@ -66,21 +67,19 @@ function confirmAllow(t: TargetInfo): Promise<boolean> {
   const cancel = $("btn-send-allow-cancel");
   overlay.hidden = false;
   return new Promise((resolve) => {
+    // Cancel has the focus (the safe choice: Enter does not allow), Tab goes round the dialog, Escape is Cancel, and the focus goes back to Send
+    const release = trapFocus(overlay, { initial: cancel, onEscape: () => finish(false), returnTo: $("btn-send") });
     const finish = (yes: boolean) => {
       overlay.hidden = true;
+      release();
       ok.removeEventListener("click", onOk);
       cancel.removeEventListener("click", onCancel);
-      document.removeEventListener("keydown", onKey);
       resolve(yes);
     };
     const onOk = () => finish(true);
     const onCancel = () => finish(false);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") finish(false);
-    };
     ok.addEventListener("click", onOk);
     cancel.addEventListener("click", onCancel);
-    document.addEventListener("keydown", onKey);
   });
 }
 
