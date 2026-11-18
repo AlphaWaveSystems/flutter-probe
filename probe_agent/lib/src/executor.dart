@@ -1725,7 +1725,14 @@ class ProbeExecutor {
           }
         }
       }
-      e.visitChildren(visit);
+      // An IndexedStack lays out every page but shows one: a list on another page is not on screen (a short list on the shown page
+      // ranks below a long one on a page that is not shown, so the rank alone does not skip it).
+      final shown = probeIndexedStackShown(e);
+      var position = 0;
+      e.visitChildren((c) {
+        if (shown == null || position == shown) visit(c);
+        position++;
+      });
     }
     WidgetsBinding.instance.rootElement?.visitChildren(visit);
     return best;
