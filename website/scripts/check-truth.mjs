@@ -61,6 +61,8 @@ const GATE = /\b(?:quality|merge|release|deploy(?:ment)?|ci|pr|build|hosted|comm
 const sentencesOf = (t) => t.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean);
 const norm = (x) => x.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 const REFUND_WORD = /(?<!\bnon-)\brefund(?:s|ed|able)?\b/gi;
+// Words that make a sentence next to a policy pointer a promise of its own ("Refund requests: see the policy. Always granted.").
+const REFUND_PROMISE = /\b(?:always|granted|guarantee[ds]?|guaranteeing|no questions|within \d+|instant(?:ly)?|automatic(?:ally)?|promptly|immediately|any time|anytime)\b/i;
 const REFUND_TEST = /(?<!\bnon-)\brefund(?:s|ed|able)?\b/i;
 // A sentence that only points to the refund policy, and nothing else.
 const POLICY_SENTENCE = /^(?:(?:the|our)\s+)?refund policy$|^(?:(?:refunds?|refund requests?|refund policy)\s+)?(?:see|read|refer to|are in|are described in|are covered by|are set out in|details in|details are in)\s+(?:our|the)\s+(?:refund\s+)?policy$/;
@@ -68,14 +70,14 @@ const POLICY_SENTENCE = /^(?:(?:the|our)\s+)?refund policy$|^(?:(?:refunds?|refu
 // offer yet.", "We never offer a money-back guarantee."). Anything else that names it (a second clause, a second mention, a question, a
 // "but", a dash or a bracket, anything after the offer but "yet", "today" or "for now") is an offer to the check and is reworded on the
 // site. Spelling out the ways a sentence can go on would be a list that never ends; this is the one shape that is allowed.
-const PLAIN_MONEY_BACK_DENIAL = /^(?:there\s+(?:is|are)\s+no|we\s+(?:have\s+no|do\s+not\s+(?:offer|have)|don't\s+(?:offer|have)|never\s+(?:offer|have))|no)\s+(?:(?:a|any)\s+)?money[- ]?back(?:\s+(?:offer|guarantee|policy))?(?:\s+(?:yet|today|at\s+the\s+moment|for\s+now))?[.!]?$/i;
+const PLAIN_MONEY_BACK_DENIAL = /^(?:there\s+(?:is|are)\s+no|we\s+(?:have\s+no|do\s+not\s+(?:offer|have)|don't\s+(?:offer|have)|never\s+(?:offer|have))|no)\s+(?:(?:a|any)\s+)?money[-\u2010-\u2015 ]?back(?:\s+(?:offer|guarantee|policy))?(?:\s+(?:yet|today|at\s+the\s+moment|for\s+now))?[.!]?$/i;
 // Other CI systems, and the words that say GitHub Actions is not the only one.
 const OTHER_CI = /\b(?:GitLab|Jenkins|Circle ?CI|Bitbucket|Travis|Azure (?:DevOps|Pipelines)|Buildkite|TeamCity|Bamboo|Codemagic|Bitrise|Drone|Semaphore|Cirrus|Gitea|Harness|Tekton|AppVeyor|Buddy)\b/i;
 const NOT_ONLY = /\bnot\s+(?:the\s+)?only\b|\bnot only\b|\b(?:too|as well|also|and more|and others|among others|besides)\b/i;
 // A sentence about uploads or CI systems, and words that look ahead: "GitLab next month", "more CI systems are on the way". The check reads
 // the sentences about uploads and CI systems for them, not the whole paragraph ("the next step", "the CLI will print a summary").
 const CI_SUBJECT = new RegExp(`\\b(?:upload\\w*|CI|GitHub Actions|pipelines?|runners?|integrations?)\\b|${OTHER_CI.source}`, 'i');
-const FORWARD = /\b(?:next|soon|shortly|in progress|under development|working on|priority|coming|planned|will|later|upcoming|roadmap|beta|follows?|arrives?|adding|on the way|in the works|in the pipeline|Q[1-4]|(?:in|by|this|next) (?:January|February|March|April|May|June|July|August|September|October|November|December|year|quarter|month|week))\b/i;
+const FORWARD = /\b(?:next|soon|shortly|under ?way|in the near future|in progress|under development|working on|priority|coming|planned|will|later|upcoming|roadmap|beta|follows?|arrives?|adding|on the way|in the works|in the pipeline|Q[1-4]|(?:in|by|this|next) (?:January|February|March|April|May|June|July|August|September|October|November|December|year|quarter|month|week))\b/i;
 // Sending reports to the cloud is an upload, whatever the verb.
 const UPLOADISH = /\bupload|\b(?:send|sends|sending|push|pushes|pushing|post|posts|stream|streams|sync|syncs|ship|ships)\b[^.!?]{0,50}\b(?:to|into)\s+(?:probe\s+)?cloud\b/i;
 const BUY_WORD = /\b(?:start|subscribe|checkout|check out|buy|purchase|upgrade)\b/i;
@@ -373,6 +375,7 @@ export function checkPage(file, raw, plans, apply) {
   // review, so a sentence that names a refund and says anything else ("Full refund within 14 days, see our policy.") fails, and so does
   // a policy that is described ("Our refund policy: 30 days."). "Non-refundable" is not an offer. A question ("Refunds? Yes, always. See
   // our refund policy.") is a sentence like another: it needs the link.
+  // A sentence in the paragraph that promises something ("Always granted.", "Within 30 days.") makes it a promise, pointer or not.
   const seenRefund = new Set();
   for (const m of text.matchAll(REFUND_WORD)) {
     const [s, e] = paragraphAt(src0, m.index);
@@ -383,13 +386,13 @@ export function checkPage(file, raw, plans, apply) {
     if (/\/refunds\//i.test(src0.slice(s, e) + (inDetails ? src0.slice(open, close) : ''))) continue;
     const sentences = sentencesOf(textOf(text.slice(s, e)) + ' ' + (inDetails ? textOf(text.slice(open, close)) : ''));
     const onlyPolicy = (x) => POLICY_SENTENCE.test(norm(x));
-    if (sentences.some(onlyPolicy) && sentences.every((x) => !REFUND_TEST.test(x) || onlyPolicy(x))) continue;
+    if (!sentences.some((x) => REFUND_PROMISE.test(x)) && sentences.some(onlyPolicy) && sentences.every((x) => !REFUND_TEST.test(x) || onlyPolicy(x))) continue;
     seenRefund.add(s);
     at(m.index, m[0], 'refund terms wait for the legal review: name a refund only next to the link to /refunds/, or in a sentence that only points to the refund policy');
   }
   // "Money-back" (also "moneyback") is an offer, except in a sentence that is nothing but a plain denial with one mention: "There is no
   // money-back offer yet.", "We never offer a money-back guarantee." A second clause, a second mention or any other ending fails.
-  for (const m of text.matchAll(/\bmoney[- ]?back\b/gi)) {
+  for (const m of text.matchAll(/\bmoney[-\u2010-\u2015 ]?back\b/gi)) {
     const [a, b] = sentenceSpan(m.index);
     const sentence = textOf(text.slice(a, b)).replace(/\u2019/g, "'").replace(/\s+/g, ' ').trim();
     if (PLAIN_MONEY_BACK_DENIAL.test(sentence)) continue;

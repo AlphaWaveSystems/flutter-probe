@@ -4,7 +4,7 @@
 // newest day is the build day (or --date / DEMO_DATE), which keeps the sample from looking abandoned. Nothing else changes: the numbers, the
 // verdicts and the notice that says the data is made up are the template's. The apply link comes from sellable.json, the one place that knows it.
 //
-//   node scripts/build-demo.mjs [--date YYYY-MM-DD] [--out dir]
+//   node scripts/build-demo.mjs [--date YYYY-MM-DD] [--out dir] [--templates dir]
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,7 +26,8 @@ export function shiftDates(text, delta) {
 export function render(template, date, applyForm) {
   const delta = Math.round((parse(date) - parse(ANCHOR)) / DAY);
   if (!template.includes('{{APPLY_FORM}}')) throw new Error('a demo template has no {{APPLY_FORM}} placeholder');
-  return shiftDates(template, delta).replaceAll('{{APPLY_FORM}}', applyForm);
+  // A function, not the string: a string replacement reads `$&`, `$1` and `$$` in it, and a URL may hold a `$`.
+  return shiftDates(template, delta).replaceAll('{{APPLY_FORM}}', () => applyForm);
 }
 
 function arg(name) {
@@ -41,9 +42,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const out = arg('--out') || join(site, 'public', 'demo');
   const applyForm = JSON.parse(readFileSync(join(site, 'sellable.json'), 'utf8')).apply.form;
   mkdirSync(out, { recursive: true });
-  const names = readdirSync(join(site, 'demo-templates')).filter((n) => n.endsWith('.html')).sort();
+  const templates = arg('--templates') || join(site, 'demo-templates');
+  // Files only: a folder whose name ends in .html is not a page.
+  const names = readdirSync(templates, { withFileTypes: true }).filter((e) => e.isFile() && e.name.endsWith('.html')).map((e) => e.name).sort();
   for (const name of names) {
-    writeFileSync(join(out, name), render(readFileSync(join(site, 'demo-templates', name), 'utf8'), date, applyForm));
+    writeFileSync(join(out, name), render(readFileSync(join(templates, name), 'utf8'), date, applyForm));
   }
   console.log(`build-demo: ${names.length} pages, newest day ${date}`);
 }
