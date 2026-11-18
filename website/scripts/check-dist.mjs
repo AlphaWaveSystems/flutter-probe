@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // Runs after `astro build`: the privacy notice says the website sets no cookies, has no analytics and that a visit reaches only its host.
 // That is a statement about every built page, the documentation included, so this reads the built site (dist/): every page, stylesheet and script.
+// scripts/site_third_party_test.go reads the sources and, when dist/ exists, the built pages and SVG files; this one adds scripts, handlers and cookies and always runs in the build.
 // It is a guard against mistakes (a font, a widget, an analytics snippet, an image pasted from elsewhere), not a proof: it reads text with patterns.
 // It refuses, when the address is written out and is on another host:
 //   - an address in href, src, srcset, poster, data, action, formaction, ping, background, imagesrcset, xlink:href or a refresh, of any tag except
 //     <a> and <area> (links a reader follows) and a <link> whose rel is only canonical, alternate or me (never fetched);
-//   - an @import, url( or image-set( in a stylesheet, a <style> or a style attribute;
+//   - an @import, url( or image-set( in a stylesheet, a <style> or a style attribute (so a font or any other file a stylesheet loads);
 //   - a quoted address in a script: inline, in an on… attribute, in a javascript: link or in a file (NAMESPACES and PARSE_BASES, named below, are
 //     never fetched; a JSON data block is not a script);
 // and it refuses a script that assigns to a `cookie` property.
@@ -30,6 +31,15 @@ const BLOCK = /<(script|style)\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/\1\s*
 const NOT_FETCHED = new Set(['canonical', 'alternate', 'me']);
 const decode = (s) => s.replace(/&#x([0-9a-f]+);?/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&#(\d+);?/g, (_, d) => String.fromCodePoint(+d)).replace(/&sol;/g, '/').replace(/&colon;/g, ':').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
 
+// The attributes of a tag as a browser keeps them: the first of two with one name wins.
+const attributesOf = (raw) => {
+  const attrs = {};
+  for (const a of raw.matchAll(ATTR)) { const k = a[1].toLowerCase(); if (!(k in attrs)) attrs[k] = decode(a[2] ?? a[3] ?? a[4] ?? ''); }
+  return attrs;
+};
+// A script of type application/json or application/ld+json is data, not code; the type is read from the parsed attributes, not from the raw text.
+const isJsonData = (raw) => /^application\/(?:ld\+)?json\s*$/i.test((attributesOf(raw).type ?? '').trim());
+
 export function distProblems(name, text) {
   const out = [];
   const remote = (u) => { if (!OWN.test(u)) out.push(`${name} loads ${u}`); };
@@ -46,15 +56,13 @@ export function distProblems(name, text) {
   const blocks = [...text.matchAll(BLOCK)];
   for (const b of blocks) {
     if (b[1].toLowerCase() === 'style') css(b[3]);
-    else if (!/(?<![\w-])type\s*=\s*["']?application\/(?:ld\+)?json["'\s]*$/i.test(b[2].trim())) js(b[3]);
+    else if (!isJsonData(b[2])) js(b[3]);
   }
   // the text of a script or a style is not markup: a tag written inside it is judged above, as script or stylesheet
   const markup = text.replace(BLOCK, (m, tag, attrs) => `<${tag}${attrs}></${tag}>`);
   for (const tag of markup.matchAll(TAG)) {
     const el = tag[1].toLowerCase();
-    const attrs = {};
-    // a browser keeps the FIRST of two attributes with one name
-    for (const a of tag[2].matchAll(ATTR)) { const k = a[1].toLowerCase(); if (!(k in attrs)) attrs[k] = decode(a[2] ?? a[3] ?? a[4] ?? ''); }
+    const attrs = attributesOf(tag[2]);
     const rel = (attrs.rel ?? '').toLowerCase().split(/\s+/).filter(Boolean);
     const followed = el === 'a' || el === 'area' || (el === 'link' && rel.length > 0 && rel.every((r) => NOT_FETCHED.has(r)));
     for (const [k, raw] of Object.entries(attrs)) {
@@ -64,7 +72,7 @@ export function distProblems(name, text) {
       else if (k === 'content' && el === 'meta' && /^refresh$/i.test(attrs['http-equiv'] ?? '')) { for (const u of v.matchAll(REMOTE)) remote(u[1]); }
       else if (LOADS.has(k)) {
         if (/^\s*javascript:/i.test(v)) js(raw);
-        else if (!followed || k === 'ping') for (const u of v.matchAll(REMOTE)) remote(u[1]);
+        else if (!followed || k === 'ping') for (const u of v.matchAll(REMOTE)) { if (!(/^\s*data:/i.test(v) && NAMESPACES.test(u[1]))) remote(u[1]); }
       }
     }
   }

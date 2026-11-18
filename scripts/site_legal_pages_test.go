@@ -41,7 +41,7 @@ var (
 	legalAttrHref    = regexp.MustCompile(`\bhref="([^"]*)"`)
 	legalAttrLang    = regexp.MustCompile(`\bhreflang="([^"]*)"`)
 	legalAttrSlug    = regexp.MustCompile(`'/[a-z-]+/'`)
-	legalSwitchedOff = regexp.MustCompile(`(?i)\{\s*\(?\s*(?:false|null|undefined|0|!1|!true|!!0|void 0|''|""|NaN)\s*\)?\s*(?:&&|\?)|\{\s*true\s*(?:\|\||\?\s*(?:null|undefined|''|"")\s*:)|&&\s*(?:false|null|undefined)\s*\}|<!--|\{/\*|<(?:template|noscript)\b|<[^<>]*\shidden[\s=/>]|display\s*:\s*none|font-size\s*:\s*0|sr-only|text/plain`)
+	legalSwitchedOff = regexp.MustCompile(`(?i)\{\s*\(?\s*(?:false|null|undefined|0|!1|!true|!!0|void 0|''|""|NaN)\s*\)?\s*(?:&&|\?)|\{\s*true\s*(?:\|\||\?\s*(?:null|undefined|''|"")\s*:)|&&\s*(?:false|null|undefined)\s*\}|<!--|\{/\*|<(?:template|noscript)\b|<[^<>]*\shidden[\s=/>]|display\s*:\s*none|font-size\s*:\s*0(?:px|em|rem|%|pt)?\s*(?:[;}"']|$)|sr-only|text/plain`)
 	legalBlocks      = regexp.MustCompile(`<(h2|li|p|ul)\b`)
 )
 
@@ -448,6 +448,13 @@ func TestBuiltSiteCheckRefusesLoadsFromAnotherHost(t *testing.T) {
 		name, file, body, want string
 	}{
 		{"a page of the site", "index.html", `<link rel="me" href="https://github.com/AlphaWaveSystems"><script type="application/ld+json">{"@context":"https://schema.org","import":"x","url":"https://github.com/AlphaWaveSystems/flutter-probe"}</script><div data-href="https://example.org/x" data-src="//example.org/y"></div><svg><use href="#a"/></svg><script>new URL(c,new URL(d||"/","https://p")).pathname</script><pre><code>&lt;script src="https://cdn.example.com/a.js"&gt;</code></pre><link rel="canonical" href="https://flutterprobe.dev/"><link rel="alternate" hreflang="es" href="https://flutterprobe.dev/terminos/"><link rel="stylesheet" href="/_astro/a.css"><script type="module" src="/_astro/b.js"></script><a href="https://github.com/AlphaWaveSystems/flutter-probe">GitHub</a><img src="/report.png" alt=""><svg xmlns="http://www.w3.org/2000/svg"></svg><script>fetch("/pagefind/x.json")</script>`, ""},
+		{"a namespace inside an inline image", "index.html", `<img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" alt="">`, ""},
+		{"a remote image inside an inline image", "index.html", `<img src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><image href='https://evil.example/a.png'/></svg>" alt="">`, "evil.example"},
+		{"a JSON type that is only text in another attribute", "index.html", `<script type="text/javascript" data-x="type=application/json">fetch("https://evil.example/x")</script>`, "evil.example"},
+		{"a JSON block whose first type wins", "index.html", `<script type="application/json" type="text/javascript">{"u":"https://example.org/x"}</script>`, ""},
+		{"a script whose first type is not JSON", "index.html", `<script type="text/javascript" type="application/json">fetch("https://evil.example/x")</script>`, "evil.example"},
+		{"a JSON type with another type after it in one value", "index.html", `<script type="application/json; charset=x">fetch("https://evil.example/x")</script>`, "evil.example"},
+		{"a link in an image map", "index.html", `<map name="m"><area href="https://github.com/AlphaWaveSystems/flutter-probe" alt="x"></map>`, ""},
 		{"an own-host image", "index.html", `<img src="https://flutterprobe.dev/og-image.svg">`, ""},
 		{"an alternate stylesheet", "index.html", `<link rel="alternate stylesheet" title="x" href="https://evil.example/alt.css">`, "evil.example"},
 		{"a stylesheet that is also alternate", "index.html", `<link href="https://evil.example/alt.css" rel="stylesheet alternate">`, "evil.example"},
@@ -537,6 +544,29 @@ func TestBuiltSiteCheckRefusesLoadsFromAnotherHost(t *testing.T) {
 			t.Errorf("%s: refused: %s", c.name, out)
 		case c.want != "" && (err == nil || !strings.Contains(string(out), c.want)):
 			t.Errorf("%s: want a refusal that names %q, got err=%v: %s", c.name, c.want, err, out)
+		}
+	}
+}
+
+// Text switched off by a style is hidden from a reader but counted by the checks above, so the pattern for it must refuse a font size of nothing
+// and must not refuse a small one.
+func TestSwitchedOffPatternReadsTheFontSize(t *testing.T) {
+	for _, c := range []struct {
+		src string
+		off bool
+	}{
+		{`<p style="font-size:0.9rem">x</p>`, false},
+		{`<p style="font-size: 0.05rem">x</p>`, false},
+		{`<p style="font-size:0.5em;color:red">x</p>`, false},
+		{`<p style="font-size:10px">x</p>`, false},
+		{`<p style="font-size:0">x</p>`, true},
+		{`<p style="font-size: 0px;">x</p>`, true},
+		{`<p style="font-size:0%;color:red">x</p>`, true},
+		{`a { font-size: 0 }`, true},
+		{`a { font-size:0rem}`, true},
+	} {
+		if got := legalSwitchedOff.MatchString(c.src); got != c.off {
+			t.Errorf("%s: switched off = %v, want %v", c.src, got, c.off)
 		}
 	}
 }
