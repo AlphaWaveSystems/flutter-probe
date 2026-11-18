@@ -15,7 +15,9 @@ import (
 // What it reads: website/src (layouts, pages, styles, documentation pages), website/public (the sample dashboard pages, SVG files) and the `head` entries of
 // website/astro.config.mjs. A named root that does not exist fails the test (a renamed directory must not turn it into a silent pass). Code samples in
 // documentation pages (fenced blocks and inline code) are skipped on purpose: they show markup, they do not load it. What it does not see: a request made by
-// a script at run time (the site has none), and the built pages in a CI job that has no `website/dist` (the built-page test then skips).
+// a script at run time (the site has none), and the built pages in a CI job that has no `website/dist` (the built-page test then skips). The Astro `head`
+// reader only matches entries written `{ tag: '...', attrs: { ... } }` in that order and without nested braces: an entry written `{ attrs: {...}, tag: 'script' }`
+// or built with a template literal is not seen by it (the built-page test would see it).
 
 var (
 	// A tag, read with its attributes: a ">" inside a quoted value does not end it.
