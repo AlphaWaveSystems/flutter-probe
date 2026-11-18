@@ -2,6 +2,10 @@
 
 The website and docs (Astro and Starlight). `npm ci`, then `npm run dev` to work on it and `npm run build` to build it into `dist/`.
 
+## The sample dashboard
+
+The pages under `/demo/` are generated on every build (`npm run build` and `npm run dev`) by `scripts/build-demo.mjs` from the templates in `demo-templates/`; `public/demo/` is the output and is not committed. Every date in a template moves by whole days so that the newest day is the day of the build (UTC), and the design-partner link is read from `sellable.json`. **The dates are those of the last deploy:** they stay as they are until the site is built again, so the sample ages between deploys (a scheduled rebuild would keep it fresh and is not set up). The pages say that the data is made up and that the dates move with each build.
+
 ## What is sellable
 
 `sellable.json` is the single source of truth for what the site may sell. For each plan it holds:

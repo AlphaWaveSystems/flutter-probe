@@ -1,6 +1,7 @@
 package scripts
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -10,16 +11,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// A page, a README or a Dockerfile that says there is a Docker image ("Official Docker image", "container images", an `ghcr.io/...` image to run) must be
+// A page, a README or a Dockerfile that says there is a Docker image ("Official Docker image", "container images", a `ghcr.io/...` image to run) must be
 // backed by a workflow that builds AND pushes one. For a long time the landing page said so while the repository only held docker/Dockerfile, no workflow
 // pushed an image, and the Dockerfile's own header told people to `docker run` an image that does not resolve.
 //
 // What it reads: README.md, docker/README.md and docker/Dockerfile, the documentation of the repository (docs/, except the research, PRD and evidence
-// folders, which describe history) and everything under website/src (pages, documentation pages). What counts as a claim: "Docker image(s)" or "container
-// image(s)" (any case), and a `ghcr.io/` reference. What counts as publishing: a workflow step that uses docker/build-push-action with `push` not false (the
+// folders, which describe history) and everything under website/src (pages, documentation pages). What counts as a claim: "Docker image(s)", "container
+// image(s)" or "OCI image(s)" (any case; a hyphen, a line break or a non-breaking space `&nbsp;` for the space), a `ghcr.io/` reference, `docker pull` and "Docker Hub". What counts as publishing: a workflow step that uses docker/build-push-action with `push` not false (the
 // action's default is not to push), or a `docker push` or `docker buildx build ... --push` command in a `run` script that is not a comment. Workflows are read
 // as YAML, both *.yml and *.yaml. A phrase that only says what is NOT done ("no Docker image is published") is a claim too: say it without those words.
-var dockerImageClaim = regexp.MustCompile(`(?i)\b(?:docker|container)\s+images?\b|\bghcr\.io/`)
+//
+// What it does not catch: a phrase split by markup (`<b>Docker</b> image`) or written with another HTML entity, other languages, and other wordings ("pull the
+// image from GHCR", "an image on a registry"). It is a guard against the claim that was made, not a proof that no image is claimed.
+var dockerImageClaim = regexp.MustCompile(`(?i)\b(?:docker|container|oci)(?:\s|-|&nbsp;|&#160;)+images?\b|\bghcr\.io/|\bdocker\s+pull\b|\bdocker\s+hub\b`)
 
 // dockerRoots are the places the guard reads: a file, or a folder read for the extensions.
 var dockerRoots = []struct {
@@ -162,20 +166,39 @@ func publishingWorkflowsIn(dir string) (publishing []string, read int, err error
 	return publishing, len(files), nil
 }
 
+// dockerGuardFloorProblem says when the guard read too little to mean anything: fewer than 30 files or 5 workflow files point to a wrong path.
+func dockerGuardFloorProblem(filesRead, workflowFiles int) string {
+	if filesRead < 30 {
+		return fmt.Sprintf("read only %d files: the paths are wrong", filesRead)
+	}
+	if workflowFiles < 5 {
+		return fmt.Sprintf("found %d workflow files: the path is wrong", workflowFiles)
+	}
+	return ""
+}
+
+func TestDockerGuardFloors(t *testing.T) {
+	for _, c := range []struct {
+		files, workflows int
+		bad              bool
+	}{{30, 5, false}, {29, 5, true}, {30, 4, true}, {0, 0, true}, {500, 40, false}} {
+		if got := dockerGuardFloorProblem(c.files, c.workflows) != ""; got != c.bad {
+			t.Errorf("floor(%d files, %d workflows) = problem %v, want %v", c.files, c.workflows, got, c.bad)
+		}
+	}
+}
+
 func TestRepositoryDoesNotClaimADockerImageWithoutAWorkflowThatPublishesOne(t *testing.T) {
 	claims, read, problems := dockerClaimsUnder("..")
 	for _, p := range problems {
 		t.Error(p)
 	}
-	if read < 30 {
-		t.Fatalf("read only %d files: the paths are wrong", read)
-	}
 	publishing, workflows, err := publishingWorkflowsIn("../.github/workflows")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if workflows < 5 {
-		t.Fatalf("found %d workflow files: the path is wrong", workflows)
+	if p := dockerGuardFloorProblem(read, workflows); p != "" {
+		t.Fatal(p)
 	}
 	if len(claims) == 0 || len(publishing) > 0 {
 		return
@@ -193,6 +216,15 @@ func TestDockerImageClaimPattern(t *testing.T) {
 		"a container image":                       true,
 		"Container Images":                        true,
 		"docker run ghcr.io/x/ci:latest":          true,
+		"Docker&nbsp;image":                       true,
+		"Docker&#160;images":                      true,
+		"the docker-image":                        true,
+		"an OCI image":                            true,
+		"an oci-image":                            true,
+		"docker pull example/ci":                  true,
+		"Docker Hub":                              true,
+		"docker build -t x .":                     false,
+		"a Dockerfile builds one":                 false,
 		"A Dockerfile for self-hosted":            false,
 		"A Docker setup is available":             false,
 		"Containers cannot run the iOS simulator": false,
@@ -271,6 +303,8 @@ func TestDockerClaimsUnderReadsEveryRoot(t *testing.T) {
 			write(base, rel, "text "+claim+" text\n")
 		}
 		write(base, "docs/research/old.md", "history: "+claim+"\n")
+		write(base, "docs/prd/plan.md", "history: "+claim+"\n")
+		write(base, "docs/evidence/log.md", "history: "+claim+"\n")
 		write(base, "docs/notes.txt", "not markdown: "+claim+"\n")
 		return base
 	}
@@ -290,8 +324,10 @@ func TestDockerClaimsUnderReadsEveryRoot(t *testing.T) {
 			t.Errorf("a claim planted in %s was not found: %v", want, found)
 		}
 	}
-	if found["docs/research/old.md"] || found["docs/notes.txt"] {
-		t.Errorf("a claim in a skipped folder or a non-markdown file was reported: %v", found)
+	for _, skipped := range []string{"docs/research/old.md", "docs/prd/plan.md", "docs/evidence/log.md", "docs/notes.txt"} {
+		if found[skipped] {
+			t.Errorf("a claim in %s (a skipped folder or a non-markdown file) was reported: %v", skipped, found)
+		}
 	}
 	if clean, _, p := dockerClaimsUnder(tree("an image")); len(clean) > 0 || len(p) > 0 {
 		t.Errorf("a clean tree reported %v %v", clean, p)
