@@ -2,6 +2,7 @@
 // The frame of the landing page, pricing, Probe Cloud and the legal pages: head, nav, footer and the one shared stylesheet.
 // No script, cookie or analytics is added here, and nothing is loaded from another host: no font, stylesheet, script or image (the fonts are the
 // visitor's system fonts, see --font and --mono in the stylesheet). scripts/site_third_party_test.go checks the sources and the built pages.
+// A legal page names its twin in the other language (other): the head then links both, and the footer links the legal pages in the page's language.
 import '../styles/site.css';
 
 interface Props {
@@ -9,19 +10,25 @@ interface Props {
   description: string;
   path: string; // the page's own path, for the canonical link: "/pricing/"
   jsonLd?: object; // only facts that are true today
-  noindex?: boolean; // a draft page that search engines should not list
+  lang?: 'en' | 'es'; // the language of the page's own text; the frame stays English
+  other?: string; // the path of the same page in the other language: "/terminos/"
 }
-const { title, description, path, jsonLd, noindex = false } = Astro.props;
+const { title, description, path, jsonLd, lang = 'en', other } = Astro.props;
 const url = `https://flutterprobe.dev${path}`;
+const otherLang = lang === 'es' ? 'en' : 'es';
+const legalLinks = lang === 'es'
+  ? [['/terminos/', 'Términos'], ['/aviso-de-privacidad/', 'Privacidad'], ['/reembolsos/', 'Reembolsos'], ['/subencargados/', 'Proveedores'], ['/empresa/', 'Empresa'], ['/contacto/', 'Contacto']]
+  : [['/terms/', 'Terms'], ['/privacy/', 'Privacy'], ['/refunds/', 'Refunds'], ['/subprocessors/', 'Providers'], ['/company/', 'Company'], ['/contact/', 'Contact']];
 ---
-<html lang="en">
+<html lang={lang}>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{title}</title>
   <meta name="description" content={description} />
-  {noindex && <meta name="robots" content="noindex" />}
   <link rel="canonical" href={url} />
+  {other && <link rel="alternate" hreflang={lang} href={url} />}
+  {other && <link rel="alternate" hreflang={otherLang} href={`https://flutterprobe.dev${other}`} />}
   <meta property="og:title" content={title} />
   <meta property="og:description" content={description} />
   <meta property="og:type" content="website" />
@@ -36,8 +43,8 @@ const url = `https://flutterprobe.dev${path}`;
   {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
 </head>
 <body>
-  <a class="skip" href="#main">Skip to the content</a>
-  <nav aria-label="Main">
+  <a class="skip" lang="en" href="#main">Skip to the content</a>
+  <nav aria-label="Main" lang="en">
     <a href="/" class="nav-logo">
       <svg viewBox="0 0 28 28" width="28" height="28" fill="none" aria-hidden="true"><rect x="2" y="2" width="24" height="24" rx="6" stroke="#3bf0e4" stroke-width="2"/><path d="M9 14l3 3 7-7" stroke="#3bf0e4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       FlutterProbe
@@ -55,15 +62,10 @@ const url = `https://flutterprobe.dev${path}`;
   <main id="main">
     <slot />
   </main>
-  <footer>
+  <footer lang="en">
     <span>FlutterProbe &middot; BSL 1.1 (CLI), MIT (agent) &middot; &copy; 2026 Alpha Wave Systems S.A. de C.V.</span>
     <div class="foot-links">
-      <a href="/terms/">Terms</a>
-      <a href="/privacy/">Privacy</a>
-      <a href="/refunds/">Refunds</a>
-      <a href="/subprocessors/">Subprocessors</a>
-      <a href="/company/">Company</a>
-      <a href="/contact/">Contact</a>
+      {legalLinks.map(([href, label]) => <a href={href} lang={lang === 'es' ? 'es' : undefined}>{label}</a>)}
       <a href="/getting-started/installation/">Docs</a>
       <a href="https://github.com/AlphaWaveSystems/flutter-probe/wiki">Wiki</a>
       <a href="https://github.com/AlphaWaveSystems/flutter-probe">GitHub</a>

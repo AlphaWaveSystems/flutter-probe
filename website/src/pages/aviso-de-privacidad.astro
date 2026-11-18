@@ -1,0 +1,96 @@
+---
+import Legal from '../layouts/Legal.astro';
+import LegalEntity from '../components/LegalEntity.astro';
+---
+<Legal title="Aviso de privacidad integral" description="Qué datos personales tratan los servicios alojados de FlutterProbe y este sitio web, para qué, por cuánto tiempo y cómo ejercer sus derechos." lang="es" other="/privacy/">
+  <p>Esta versión en español es la que obliga. La <a href="/privacy/" hreflang="en">versión en inglés</a> es una traducción de cortesía; si difieren, prevalece la versión en español.</p>
+
+  <h2>1. Responsable de sus datos personales</h2>
+  <p>El responsable del tratamiento de los datos personales descritos en este aviso es:</p>
+  <LegalEntity lang="es" />
+  <p>(«nosotros»). Este aviso cubre este sitio web y los servicios alojados de FlutterProbe (Probe Cloud y su panel). La herramienta de línea de comandos, el agente de Dart y Probe Studio se ejecutan en su equipo y no nos envían nada, salvo que usted suba información a un servicio alojado.</p>
+
+  <h2>2. Datos personales que tratamos</h2>
+  <ul>
+    <li><strong>Cuenta e inicio de sesión:</strong> el correo electrónico con el que inicia sesión, el equipo al que pertenece, la clave de licencia que emitimos al equipo y los registros de sus inicios de sesión y sesiones.</li>
+    <li><strong>Facturación:</strong> el correo electrónico de facturación, los registros de cliente, suscripción y comprobantes que nuestro proveedor de pagos conserva por nuestra cuenta, y los datos fiscales que usted nos envíe si solicita un comprobante fiscal. No recibimos ni almacenamos números completos de tarjeta.</li>
+    <li><strong>Reportes de ejecución que usted sube:</strong> los resultados de las pruebas y, con ellos, lo que sus pruebas y su configuración ponen en el reporte: nombres de pruebas y de archivos, mensajes de error (recortados cuando son largos, y sin las rutas ni los valores con apariencia de secreto que la herramienta de línea de comandos elimina antes de la carga), el nombre del dispositivo, la versión del sistema operativo, el identificador y la versión de la aplicación, el nombre del archivo de configuración, etiquetas, cifras de rendimiento, las propiedades que usted define, la versión del agente y la configuración regional. No se suben capturas de pantalla, videos, registros (logs) ni identificadores de dispositivo.</li>
+    <li><strong>Datos de la compilación que realizó la carga:</strong> el repositorio, la rama, el commit, el pull request, el trabajo (job) y el número de ejecución, el tipo de dispositivo (emulador, simulador o físico), la etiqueta que usted da a la ejecución y qué pruebas se reintentaron, y el token de identidad que su sistema de compilación emite para la carga. Verificamos el token y no lo conservamos. De un token válido podemos conservar, para registrar el repositorio en su equipo, su nombre e identificador, el identificador de su propietario, si es público, privado o interno, y su rama predeterminada; cuando verifica la ejecución, conservamos los datos que confirma (el repositorio y su identificador, la rama o etiqueta, el pull request y sus ramas de origen y de destino, el commit, el tipo de evento que inició la compilación, el identificador de la ejecución y el número de intento, y el identificador y la vigencia del token).</li>
+    <li><strong>Ejecuciones que usted sube desde su propio equipo</strong> (solo si usted lo elige): en lugar de los datos de la compilación, el nombre del repositorio, la rama y el commit, si la copia de trabajo tenía cambios sin confirmar, una huella de los archivos probados (un hash del árbol de git, no los archivos), un identificador aleatorio de la instalación que realiza la carga y un número de secuencia.</li>
+    <li><strong>Registros de seguridad:</strong> un hash unidireccional acortado de la dirección IP de una solicitud, usado para contar solicitudes y detener abusos; el servicio de pagos mantiene la dirección IP misma únicamente en su memoria de trabajo, mientras esa instancia del servicio está en ejecución, y nunca la escribe en almacenamiento. Conservamos un registro de las acciones relevantes para la seguridad (como inicios de sesión, cargas y cambios en un equipo) con identificadores en forma de hash; algunos de esos registros contienen el nombre del repositorio y el identificador del equipo.</li>
+    <li><strong>Mensajes:</strong> lo que usted nos escribe por correo electrónico, y el registro de los correos que le enviamos (dirección, contenido y si el mensaje fue entregado).</li>
+    <li><strong>Este sitio web:</strong> no instala cookies y no tiene analítica. La empresa que lo aloja recibe la dirección IP y los datos del navegador de cada solicitud, como cualquier servicio de alojamiento web.</li>
+  </ul>
+  <p>No solicitamos datos personales sensibles, y los servicios no están destinados a ellos. No los incluya en sus pruebas ni en sus reportes.</p>
+
+  <h2>3. Finalidades del tratamiento</h2>
+  <p>Usamos los datos únicamente para las siguientes finalidades, todas ellas necesarias para prestar los servicios que usted solicita (finalidades primarias):</p>
+  <ul>
+    <li>crear su cuenta, iniciar su sesión y mostrar a su equipo sus resultados;</li>
+    <li>almacenar y procesar los reportes que usted sube, y calcular los resúmenes que muestra el panel;</li>
+    <li>cobrar los planes de pago, enviar comprobantes y los avisos de renovación, y conservar la contabilidad que la ley exige;</li>
+    <li>mantener seguros los servicios, prevenir abusos e investigar incidentes;</li>
+    <li>responder sus mensajes y enviarle avisos sobre el servicio y sobre cambios a sus términos;</li>
+    <li>cumplir la ley y los requerimientos de autoridades competentes.</li>
+  </ul>
+  <p>No tenemos finalidades secundarias. No usamos sus datos para publicidad, no los vendemos, no elaboramos perfiles sobre usted y no tomamos decisiones sobre usted únicamente por medios automatizados. No enviamos correos de mercadotecnia.</p>
+  <p>Cuando la ley requiere su consentimiento, usted lo otorga al crear una cuenta o al enviarnos datos después de que este aviso fue puesto a su disposición. Puede revocarlo como se describe en la sección 7.</p>
+
+  <h2>4. Quién recibe sus datos</h2>
+  <p>Usamos proveedores que tratan datos por nuestra cuenta y conforme a nuestras instrucciones (encargados): alojamiento y almacenamiento, envío de correo electrónico y, para la ejecución de los cobros, el procesador de pagos. Se nombran, con lo que cada uno recibe y su papel, en la <a href="/subencargados/">página de proveedores</a>. Algunos operan fuera de México, incluso en los Estados Unidos de América. La comunicación de datos a un encargado es una remisión y no una transferencia.</p>
+  <p>Además, realizamos las siguientes transferencias, que conforme al artículo 36 de la Ley no requieren su consentimiento: (a) a Stripe, que también trata los datos de pago como responsable independiente para prevenir fraudes y cumplir sus propias obligaciones legales y regulatorias, transferencia necesaria para cumplir el contrato con usted; (b) a GitHub, que al alojar este sitio web registra la dirección IP de cada visita para sus propios fines de seguridad; (c) a las autoridades competentes, cuando lo ordenen de manera fundada y motivada. No realizamos ninguna otra transferencia y no comunicamos sus datos a terceros para publicidad; si llegara a ser necesaria una transferencia que requiera su consentimiento, se lo pediremos antes. Al aceptar este aviso, usted acepta las transferencias aquí descritas en la medida en que la ley exija su aceptación.</p>
+
+  <h2>5. Plazos de conservación</h2>
+  <ul>
+    <li><strong>Ejecuciones y resúmenes diarios:</strong> se eliminan a más tardar 365 días después de la carga.</li>
+    <li><strong>Detalle de los resultados que no pasaron:</strong> se elimina por mes calendario completo, una vez que ese mes terminó hace más de 90 días (es decir, a más tardar unos cuatro meses después de la carga).</li>
+    <li><strong>Datos de la cuenta y del equipo:</strong> mientras exista la cuenta, y se eliminan a solicitud (sección 7).</li>
+    <li><strong>Registros de facturación y contabilidad:</strong> durante el plazo que exigen las leyes fiscales y mercantiles.</li>
+    <li><strong>Registros de seguridad:</strong> mientras operen los servicios, porque son necesarios para detectar y acreditar usos indebidos.</li>
+    <li><strong>Correos intercambiados con nosotros:</strong> mientras sean necesarios para atender su solicitud y documentarla.</li>
+  </ul>
+  <p>El panel todavía no tiene un botón para eliminar sus propios datos. Escríbanos y los eliminamos manualmente, salvo lo que la ley nos obligue a conservar.</p>
+
+  <h2>6. Cookies</h2>
+  <p>Este sitio web no instala cookies y no usa web beacons ni tecnologías de rastreo similares. El panel de los servicios alojados instala dos cookies, ambas estrictamente necesarias para iniciar sesión, legibles únicamente por nuestro servidor y enviadas solo por conexión cifrada:</p>
+  <ul>
+    <li><code>probe_login</code>, durante 15 minutos, para completar un inicio de sesión;</li>
+    <li><code>probe_session</code>, durante la duración de sesión que usted elige al iniciar sesión (de 1 a 30 días), con los identificadores del equipo y de la sesión.</li>
+  </ul>
+  <p>Usted puede bloquearlas o eliminarlas en su navegador; sin ellas no puede iniciar sesión. No se usan para seguirle en otros sitios, y ningún dato obtenido con ellas se comunica a nadie más.</p>
+
+  <h2>7. Derechos ARCO, revocación del consentimiento y limitación del uso</h2>
+  <p>Usted tiene derecho a acceder a sus datos personales, a rectificarlos cuando sean inexactos o estén incompletos, a cancelarlos y a oponerse a su tratamiento (derechos ARCO). También puede revocar el consentimiento que haya otorgado y solicitar que limitemos el uso o la divulgación de sus datos. Nuestro departamento de datos personales atiende estas solicitudes.</p>
+  <p>Para cualquiera de estos trámites, envíe un correo electrónico a <a href="mailto:support@alphawavesystems.com">support@alphawavesystems.com</a> con:</p>
+  <ul>
+    <li>su nombre y el correo electrónico al que desea que le respondamos;</li>
+    <li>un documento que acredite su identidad o, si actúa por otra persona, su representación;</li>
+    <li>el derecho que desea ejercer y la descripción clara y precisa de los datos de que se trata (esta descripción no es necesaria en una solicitud de acceso);</li>
+    <li>cualquier elemento que facilite localizar los datos, como el correo electrónico de la cuenta o el nombre del equipo; para una rectificación, el dato correcto y el documento que lo sustente.</li>
+  </ul>
+  <p>Si falta algo, se lo pediremos. Le respondemos dentro de los 20 días hábiles siguientes a la recepción de su solicitud y, si resulta procedente, la hacemos efectiva dentro de los 15 días hábiles siguientes. La ley permite ampliar cada uno de estos plazos una sola vez, por un periodo igual, cuando el caso lo justifique. El trámite es gratuito. Respondemos por correo electrónico, y el acceso se otorga mediante copia electrónica.</p>
+  <p>Revocar el consentimiento o cancelar datos que necesitamos para prestar los servicios implica que cerremos la cuenta. Algunos datos no pueden eliminarse de inmediato porque la ley nos obliga a conservarlos; en ese caso los bloqueamos y los usamos solo para ese fin.</p>
+  <p>Como no usamos sus datos para publicidad, no existe un listado de exclusión al cual inscribirse. Para limitar un uso o una divulgación, escriba a la misma dirección.</p>
+  <p>Si considera que su derecho a la protección de datos personales ha sido vulnerado, o no está de acuerdo con nuestra respuesta, puede acudir a la Secretaría Anticorrupción y Buen Gobierno, autoridad mexicana en materia de protección de datos personales, dentro de los 15 días hábiles siguientes a la fecha en que le comuniquemos nuestra respuesta; si no respondemos en plazo, puede acudir a ella a partir del vencimiento de ese plazo.</p>
+
+  <h2>8. Seguridad</h2>
+  <p>Aplicamos medidas de seguridad administrativas, técnicas y físicas para proteger los datos personales contra daño, pérdida, alteración, destrucción o uso, acceso o tratamiento no autorizado: entre otras, conexiones cifradas, acceso limitado a lo que cada función necesita, secretos separados de los datos de la aplicación y registros de las acciones relevantes para la seguridad. Ningún sistema es perfectamente seguro. Si una vulneración de seguridad afecta de forma significativa sus derechos patrimoniales o morales, se lo informaremos de inmediato para que pueda tomar las medidas correspondientes.</p>
+
+  <h2>9. Cuando actuamos por cuenta de nuestros clientes</h2>
+  <p>Los reportes que sube un equipo pueden contener datos personales que la organización de ese equipo decide incluir. Respecto de esos datos, la organización es el responsable y nosotros los tratamos únicamente por su cuenta, como encargado, para prestar los servicios. Si usted es una persona mencionada en uno de esos reportes, dirija su solicitud a esa organización; si nos escribe a nosotros, le remitiremos la solicitud. Las organizaciones que necesiten un contrato de tratamiento de datos pueden solicitárnoslo.</p>
+
+  <h2>10. Si usted se encuentra en el Espacio Económico Europeo o en el Reino Unido</h2>
+  <p>Cuando la legislación de protección de datos de su país nos sea aplicable, esta sección también aplica.</p>
+  <ul>
+    <li><strong>Bases jurídicas:</strong> tratamos los datos de cuenta, de reportes y de facturación para ejecutar el contrato con usted o con su organización; los registros de seguridad, por nuestro interés legítimo en mantener seguros los servicios y prevenir abusos; y los registros contables, para cumplir obligaciones legales.</li>
+    <li><strong>Sus derechos:</strong> acceso, rectificación, supresión, limitación, portabilidad y oposición, en los casos que la ley prevé, y el derecho a retirar el consentimiento cuando el tratamiento se base en él. Use el procedimiento de la sección 7.</li>
+    <li><strong>Reclamaciones:</strong> puede presentar una reclamación ante la autoridad de protección de datos de su país.</li>
+    <li><strong>Otros países:</strong> sus datos se tratan en México y en los países donde operan nuestros proveedores, incluidos los Estados Unidos de América. Esos países pueden no proteger los datos personales de la misma manera que el suyo. No prometemos que sus datos permanezcan en una sola región.</li>
+  </ul>
+
+  <h2>11. Menores de edad</h2>
+  <p>Los servicios son para profesionales. No están dirigidos a menores de 18 años, y no recabamos sus datos a sabiendas. Si considera que un menor nos proporcionó datos, escríbanos y los eliminaremos.</p>
+
+  <h2>12. Cambios a este aviso</h2>
+  <p>Podemos modificar este aviso cuando cambien la ley, los servicios o nuestros proveedores. La versión vigente, con su número y fecha, está siempre en esta página. Cuando un cambio afecte la forma en que usamos sus datos, además lo comunicaremos por correo electrónico a los titulares de cuenta antes de que aplique.</p>
+</Legal>

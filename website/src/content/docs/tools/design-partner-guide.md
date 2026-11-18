@@ -42,4 +42,4 @@ Two uploads from one job need different `--upload-label` values. An upload never
 - **Bugs and feature requests:** open an issue on [GitHub](https://github.com/AlphaWaveSystems/flutter-probe/issues). Issues are public, so leave out private details.
 - **Anything private, or questions about access:** email [support@alphawavesystems.com](mailto:support@alphawavesystems.com). We aim to reply within a few working days.
 
-See the [terms](/terms/), [privacy policy](/privacy/) and [refund policy](/refunds/) drafts.
+See the [terms](/terms/), the [privacy notice](/privacy/) and the [refund and cancellation policy](/refunds/).
