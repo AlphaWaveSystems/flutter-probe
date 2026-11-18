@@ -10,7 +10,7 @@ Welcome to the FlutterProbe wiki. This documentation covers architecture details
 - [iOS Integration Guide](iOS-Integration-Guide) — iOS-specific setup, known limitations, and workarounds
 - [Android platform guide](https://flutterprobe.dev/platform/android/) — Android-specific setup and ADB usage
 - [CI/CD with GitHub Actions](https://flutterprobe.dev/ci-cd/github-actions/) — Running FlutterProbe in CI pipelines
-- [Device clouds](https://flutterprobe.dev/tools/cloud-farms/) — the providers the CLI implements (BrowserStack, SauceLabs, AWS Device Farm, Firebase Test Lab, LambdaTest and others) and which of them have been verified on a live account
+- [Device clouds](https://flutterprobe.dev/tools/cloud-farms/) — the five providers the CLI has code for (BrowserStack, SauceLabs, AWS Device Farm, Firebase Test Lab, LambdaTest); none has been verified on a live account yet
 - [Composite Tests](Composite-Tests) — Multi-device coordinated testing
 - [Troubleshooting](Troubleshooting) — Common issues and solutions
 - [Release pipeline](https://github.com/AlphaWaveSystems/flutter-probe/blob/main/docs/ops/release-pipeline.md) — How a release is cut
