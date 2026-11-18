@@ -20,6 +20,7 @@ const issueTemplateDir = "../.github/ISSUE_TEMPLATE"
 
 // The pages that describe the design-partner offer. Each offers both ways to apply.
 var applyPages = []string{
+	"../website/src/pages/index.astro",
 	"../website/src/pages/pricing.astro",
 	"../website/src/pages/probe-cloud.astro",
 	"../website/src/content/docs/tools/design-partner-guide.md",
@@ -125,6 +126,8 @@ func TestDesignPartnerFormAsksWhatTheProgramNeeds(t *testing.T) {
 		{"ci", "dropdown", true},
 		{"devices", "checkboxes", false},
 		{"today", "textarea", true},
+		{"team-size", "input", false},
+		{"source", "dropdown", false},
 		{"email", "input", false},
 	}
 	for _, w := range want {
@@ -143,10 +146,27 @@ func TestDesignPartnerFormAsksWhatTheProgramNeeds(t *testing.T) {
 	if got := options(byID["ci"]); strings.Join(got, "|") != "GitHub Actions|Other" {
 		t.Errorf("CI provider options: want GitHub Actions and Other, got %v", got)
 	}
+	if got := options(byID["source"]); strings.Join(got, "|") != "Search|GitHub|pub.dev|A person|A post|Other" {
+		t.Errorf("how-did-you-hear options: want Search, GitHub, pub.dev, A person, A post and Other, got %v", got)
+	}
+	// The note beside the CI provider says what is true on the pages: the upload client is built for GitHub Actions, other CI is not supported
+	// for uploads yet, and what to do (choose Other and say which). It must not say uploads work today: the hosted service is not live.
+	ciNote := byID["ci"].Attributes.Description
+	for _, want := range []string{"built for GitHub Actions", "not supported for uploads yet", "Other", "tell us what you use"} {
+		if !strings.Contains(ciNote, want) {
+			t.Errorf("the CI provider note must say %q, says %q", want, ciNote)
+		}
+	}
+	if uploadsWorkToday.MatchString(ciNote) || strings.Contains(strings.ToLower(ciNote), "live") {
+		t.Errorf("the CI provider note must not say uploads work today or that the service is live, says %q", ciNote)
+	}
 	if got := options(byID["devices"]); strings.Join(got, "|") != "Android emulator|iOS simulator|Physical device" {
 		t.Errorf("device options: want Android emulator, iOS simulator and Physical device, got %v", got)
 	}
 }
+
+// uploadsWorkToday matches a claim that uploads work today ("work today", "works from GitHub Actions today"): the hosted service is not live.
+var uploadsWorkToday = regexp.MustCompile(`(?i)\bworks?\b[^.]*\btoday\b`)
 
 // options returns a field's option texts: plain strings for a dropdown, the label of each option for checkboxes.
 func options(f formField) []string {

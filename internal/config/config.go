@@ -106,7 +106,7 @@ type RelayConfig struct {
 	ConnectTimeout time.Duration `yaml:"connect_timeout"` // max time to wait for agent to connect to relay (default: 60s)
 }
 
-// AIConfig holds settings for LLM-powered features (test generation, self-healing,
+// AIConfig holds settings for LLM-powered features (test generation, selector proposals,
 // `with ai` visual assertions).
 type AIConfig struct {
 	APIKey   string        `yaml:"api_key"`  // provider API key (supports ${ENV_VAR} syntax). Not required for provider: local.

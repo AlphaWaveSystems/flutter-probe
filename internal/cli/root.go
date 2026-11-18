@@ -31,7 +31,6 @@ Examples:
   probe test                       # run all tests in ./tests/
   probe test tests/login.probe     # run a single file
   probe test --tag smoke           # run tests tagged @smoke
-  probe test --watch               # re-run on file changes
   probe device list                # list connected emulators/simulators
   probe lint tests/                # validate .probe files without running
 `,
