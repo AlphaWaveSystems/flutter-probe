@@ -208,7 +208,7 @@ optional `ProbeAdvertiser` hook that you implement in your app (no mDNS plugin i
 
 ## Requirements
 
-- **Flutter** 3.19+ (tested up to 3.41)
+- **Flutter** 3.19+ (latest tested: 3.50.0)
 - **Dart** 3.3+
 - **FlutterProbe CLI** — [install instructions](https://github.com/AlphaWaveSystems/flutter-probe#installation)
 

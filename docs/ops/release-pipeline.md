@@ -1,7 +1,7 @@
 # Release pipeline: canary → dogfood → stable
 
 Every release passes through a canary channel and a dogfood gate before it
-becomes the stable version that `brew install probe` and pub.dev serve. No
+becomes the stable version that `brew install AlphaWaveSystems/tap/probe` and pub.dev serve. No
 step in this pipeline depends on a human; the gates are checks, labels and
 timers.
 
@@ -10,7 +10,7 @@ timers.
 | Channel | Tag | Workflow | Installs as |
 | --- | --- | --- | --- |
 | Canary | `vX.Y.Z-next.N` | `release-canary.yml` | `brew install AlphaWaveSystems/tap/probe@next`; agent from the tagged source (git dependency, `path: probe_agent`); a pub.dev pre-release is published only when the pubspec version carries `-next.N`. User guide: website `getting-started/installation` |
-| Stable | `vX.Y.Z` | `release.yml` + `publish-pub-dev.yml` | `brew install probe`; pub.dev stable |
+| Stable | `vX.Y.Z` | `release.yml` + `publish-pub-dev.yml` | `brew install AlphaWaveSystems/tap/probe`; pub.dev stable |
 
 `scripts/release.sh 0.27.0-next.1` bumps the version files, commits and tags a
 canary; `scripts/release.sh 0.27.0` tags the stable release once the gate has

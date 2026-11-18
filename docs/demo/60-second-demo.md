@@ -7,7 +7,7 @@ Before recording: a Flutter app with `flutter_probe_agent` added, running on a b
 | Time | Screen | Say | Do |
 |---|---|---|---|
 | 0:00 | Title card | "Flutter end-to-end tests, written in plain English." | none |
-| 0:05 | Terminal | "Install and scaffold in two commands." | `brew install probe` (already installed: show `probe version`), then `probe init` |
+| 0:05 | Terminal | "Install and scaffold in two commands." | `brew install AlphaWaveSystems/tap/probe` (already installed: show `probe version`), then `probe init` |
 | 0:15 | Editor | "A test reads like a manual test case." | Show `tests/login.probe` (below) |
 | 0:25 | Terminal | "Lint catches mistakes before a device is involved." | `probe lint tests` |
 | 0:30 | Terminal + simulator | "Run it. It drives the live widget tree, not screenshots." | `probe test tests/login.probe --device <id> -v` |

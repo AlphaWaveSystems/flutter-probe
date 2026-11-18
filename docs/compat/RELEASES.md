@@ -111,7 +111,7 @@ diff** is `docs/compat/catalog.json` between the two releases. Anything not in o
 - **Breaking-change pages listed for 3.47** (titles; not read in full): OpenGL ES render-to-texture content stored top-down; update of the semantics header and `headingLevel` behaviour on iOS and Android
   (`.../breaking-changes/semantics-header-heading-level`); removal of `describeEnum` (`.../breaking-changes/remove-describeEnum`). The index also links a page about deprecating the `value` of `DropdownButtonFormField`
   (`.../breaking-changes/deprecate-dropdownbuttonformfield-value`), whose release group was not read.
-- **Dart 3.13** (`https://github.com/dart-lang/sdk/blob/3.13.7/CHANGELOG.md`): 3.13.0 (2026-08-12) adds primary constructors (needs `sdk: '^3.13.0'`) and has breaking changes (a type-promotion change; `dart:io`
+- **Dart 3.13** (`https://github.com/dart-lang/sdk/blob/3.13.7/CHANGELOG.md`): 3.13.0 (2026-08-12) adds primary constructors (needs `sdk: '^3.13.0'`) and has breaking changes (no `final`/`var` on non-declaring parameters, which the changelog of the `main` branch of `dart-lang/sdk` lists under 3.13.0 and the copies of the changelog at the tags 3.13.0, 3.13.1 and 3.13.7 do not, read on 2026-11-18; a type-promotion change; `dart:io`
   `NetworkInterface.addresses` returns `List<InterfaceAddress>`); 3.13.1 to 3.13.7 are fixes (3.13.2 "Deprecates the legacy analyzer plugin system"; 3.13.7 (2026-10-22) uses the Android 14+ Conscrypt root certificate store).
   Dates of the 3.13.x patches are as that file prints them, not the manifest's.
 - **What this means for FlutterProbe:** the agent uses none of the removed or deprecated APIs named above. The tool requirements of 3.47 were not read. **Fixture suite on 3.47.x:** not run. **Assessed:** no.
