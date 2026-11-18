@@ -330,6 +330,7 @@ func TestSiteTruthRefusesLegalDataThatCannotBePublished(t *testing.T) {
 		{"a version in words", `"version":"1.0.0"`, `"version":"Draft"`, "is not a published version"},
 		{"a date that does not exist", "2026-11-17", "2026-02-30", "is not a date"},
 		{"no email", "someone@example.com", "", "company.email"},
+		{"no name", "Example S.A. de C.V.", " ", "company.name"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

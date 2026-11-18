@@ -3,6 +3,7 @@ package scripts
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -35,7 +36,10 @@ var (
 	// A page never states the version or the date itself: both come from legal.json through the layout, so the two languages cannot differ.
 	legalOwnVersion = regexp.MustCompile(`(?i)\bversi[oó]n \d|\bvigente desde\b|\beffective (?:from |on )?\d|\b20\d\d-\d\d-\d\d\b`)
 	legalHref       = regexp.MustCompile(`href="(/[^"#]*)`)
-	legalTwinLink   = regexp.MustCompile(`href="([^"]*)" hreflang="(en|es)"`)
+	legalAnchor     = regexp.MustCompile(`<a\b[^>]*>`)
+	legalAttrHref   = regexp.MustCompile(`\bhref="([^"]*)"`)
+	legalAttrLang   = regexp.MustCompile(`\bhreflang="([^"]*)"`)
+	legalAttrSlug   = regexp.MustCompile(`'/[a-z-]+/'`)
 	legalBlocks     = regexp.MustCompile(`<(h2|li|p|ul)\b`)
 )
 
@@ -61,9 +65,13 @@ func legalPageProblems(src, page, twin string, spanish bool) (problems []string)
 	if spanish {
 		twinLang = "en"
 	}
-	for _, m := range legalTwinLink.FindAllStringSubmatch(src, -1) {
-		if m[1] != "/"+twin+"/" || m[2] != twinLang {
-			problems = append(problems, page+".astro links "+m[1]+" as its "+m[2]+" version; its other-language page is /"+twin+"/")
+	for _, a := range legalAnchor.FindAllString(src, -1) {
+		l, h := legalAttrLang.FindStringSubmatch(a), legalAttrHref.FindStringSubmatch(a)
+		if l == nil || h == nil {
+			continue
+		}
+		if h[1] != "/"+twin+"/" || l[1] != twinLang {
+			problems = append(problems, page+".astro links "+h[1]+" as its "+l[1]+" version; its other-language page is /"+twin+"/")
 		}
 	}
 	return problems
@@ -133,7 +141,25 @@ func TestLegalPagesComeInPairsAndAreNotDrafts(t *testing.T) {
 			t.Errorf("%s states %s itself: the version and the date come from legal.json", name, m)
 		}
 	}
+	// A switched-off or commented-out line still contains its text, so neither is allowed in the frame.
 	entity := readSite(t, "src/components/LegalEntity.astro")
+	for name, src := range map[string]string{"Legal.astro": layout, "Site.astro": frame, "LegalEntity.astro": entity} {
+		if m := regexp.MustCompile(`\bfalse\s*&&|&&\s*false\b|<!--|\{/\*`).FindString(src); m != "" {
+			t.Errorf("%s contains %q: a line of the frame is printed or removed, not switched off", name, m)
+		}
+	}
+	es := regexp.MustCompile(`(?s)lang === 'es'\s*\? \[(.*?)\]\s*: \[(.*?)\];`).FindStringSubmatch(frame)
+	if es == nil {
+		t.Fatal("Site.astro no longer builds legalLinks as one list per language")
+	}
+	for i, slugs := range [][]string{{"/terminos/", "/aviso-de-privacidad/", "/reembolsos/", "/subencargados/", "/empresa/", "/contacto/"}, {"/terms/", "/privacy/", "/refunds/", "/subprocessors/", "/company/", "/contact/"}} {
+		if got := legalAttrSlug.FindAllString(es[i+1], -1); strings.Join(got, " ") != "'"+strings.Join(slugs, "' '")+"'" {
+			t.Errorf("Site.astro: the footer of language %d links %v, want %v", i, got, slugs)
+		}
+	}
+	if !strings.Contains(frame, "legalLinks.map(([href, label]) => <a href={href}") {
+		t.Error("Site.astro no longer prints legalLinks in the footer")
+	}
 	for _, w := range []string{"{c.name}", "{c.address}", "{c.phone}", "{c.email}"} {
 		if !strings.Contains(entity, w) {
 			t.Errorf("LegalEntity.astro no longer prints %s", w)
@@ -171,6 +197,7 @@ func TestLegalPageProblems(t *testing.T) {
 		{"its own date", strings.Replace(ok, "<p>x</p>", "<p>Vigente desde el 1 de enero</p>", 1), true, true},
 		{"a body link to the twin", strings.Replace(ok, "<p>x</p>", `<p><a href="/terminos/" hreflang="es">es</a></p>`, 1), false, false},
 		{"a body link to another page as the twin", strings.Replace(ok, "<p>x</p>", `<p><a href="/reembolsos/" hreflang="es">es</a></p>`, 1), false, true},
+		{"a body link to another page as the twin, hreflang first", strings.Replace(ok, "<p>x</p>", `<p><a hreflang="es" href="/reembolsos/">es</a></p>`, 1), false, true},
 		{"a body link to the twin in the wrong language", strings.Replace(ok, "<p>x</p>", `<p><a href="/terminos/" hreflang="en">es</a></p>`, 1), false, true},
 		{"no Legal tag", "<p>x</p>", false, true},
 	}
@@ -287,6 +314,37 @@ func TestLegalPagesKeepTheirRequiredClauses(t *testing.T) {
 		"subprocessors": {"<h2>Stripe</h2>", "<h2>Cloudflare</h2>", "<h2>Resend</h2>", "<h2>GitHub</h2>", "independent controller", "on its own account", "before a new provider starts"},
 		"subencargados": {"<h2>Stripe</h2>", "<h2>Cloudflare</h2>", "<h2>Resend</h2>", "<h2>GitHub</h2>", "responsable independiente", "por cuenta propia", "antes de que un nuevo proveedor"},
 	}
+	// Numbers and limits that the two languages must both keep: each is counted, so one of two occurrences cannot change alone.
+	counted := map[string]map[string]int{
+		"terms":               {"at least 30 days before": 3, "PERIOD OF TWELVE MONTHS": 1},
+		"terminos":            {"con al menos 30 días de anticipación": 3, "PERIODO DE DOCE MESES": 1, "prevalece la versión en español": 1},
+		"privacy":             {"15 business days": 2, "20 business days": 1},
+		"aviso-de-privacidad": {"15 días hábiles": 2, "20 días hábiles": 1, "prevalece la versión en español": 1},
+		"refunds":             {"a dispute that covers the current period is open": 1, "for reasons attributable to us": 1, "we refund or credit what the law requires": 1, "we refund the difference": 1, "we refund the part of the period that was not provided": 1},
+		"reembolsos":          {"una aclaración que abarque el periodo en curso": 1, "por causas imputables a nosotros": 1, "reembolsamos o bonificamos lo que la ley exija": 1, "reembolsamos la diferencia": 1, "reembolsamos la parte del periodo que no se prestó": 1, "prevalece la versión en español": 1},
+	}
+	for page, want := range counted {
+		src := readSite(t, "src/pages/"+page+".astro")
+		for w, n := range want {
+			if got := strings.Count(src, w); got != n {
+				t.Errorf("%s.astro contains %q %d time(s), want %d", page, w, got, n)
+			}
+		}
+	}
+	// A refund that depends on our goodwill is not a refund the reader can rely on, and the contact and company pages print no number:
+	// the telephone is in legal.json and only the terms and the privacy notice print it.
+	discretion := regexp.MustCompile(`(?i)\bdiscreci[oó]n\b|\bdiscretion\b|\ben ningún caso\b|\bunder no circumstances\b|\bin no case\b`)
+	for _, page := range []string{"refunds", "reembolsos"} {
+		if m := discretion.FindString(readSite(t, "src/pages/"+page+".astro")); m != "" {
+			t.Errorf("%s.astro says %q: the policy states when we refund, not that we decide", page, m)
+		}
+	}
+	number := regexp.MustCompile(`\+?\d[\d ().-]{7,}\d`)
+	for _, page := range []string{"contact", "contacto", "company", "empresa"} {
+		if m := number.FindString(readSite(t, "src/pages/"+page+".astro")); m != "" {
+			t.Errorf("%s.astro prints the number %q: no telephone or registration number is written into a page", page, m)
+		}
+	}
 	forbidden := regexp.MustCompile(`(?i)\bno refunds?\b|non-refundable|no right of withdrawal|sin derecho a reembolso|no reembolsable|\bno hay reembolsos?\b|\bno se (?:hacen|otorgan) reembolsos\b|\bexclusively\b|\bexclusivamente\b|\bexclusive (?:jurisdiction|venue)\b|\b(?:jurisdicción|competencia) exclusiva\b|GDPR does not apply|art(?:icle|ículo)?\.? 27\b|\bnot verified\b|\bno hemos verificado\b|\bhave not verified\b`)
 	for page, want := range required {
 		src := readSite(t, "src/pages/"+page+".astro")
@@ -362,5 +420,55 @@ func TestCompanyPageProblems(t *testing.T) {
 				t.Errorf("problems = %v, want %v: %v", got, c.bad, companyPageProblems(c.src, want))
 			}
 		})
+	}
+}
+
+// The privacy notice says the website sets no cookies, has no analytics and that only its host sees a visit. That holds while the frame, the
+// pages, the components and the stylesheet load nothing from another host: no stylesheet, font, script, image or frame.
+func TestSitePagesLoadNothingFromAnotherHost(t *testing.T) {
+	load := regexp.MustCompile(`(?i)<(?:link|script|img|iframe|video|audio|source|embed|object)\b[^>]*\b(?:href|src|data)=["'{` + "`" + `]*(?:https?:)?//[^>]*>|@import[^;]*//|url\(\s*["']?(?:https?:)?//`)
+	own := regexp.MustCompile(`^<link rel="(?:canonical|alternate)"`)
+	n := 0
+	for _, dir := range []string{"src/layouts", "src/pages", "src/components", "src/styles"} {
+		err := filepath.WalkDir(filepath.Join("../website", dir), func(p string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return err
+			}
+			raw, err := os.ReadFile(p)
+			if err != nil {
+				return err
+			}
+			n++
+			for _, m := range load.FindAllString(string(raw), -1) {
+				if !own.MatchString(m) {
+					t.Errorf("%s loads from another host: %s", p, m)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n < 15 {
+		t.Fatalf("read %d files of the site, want at least 15: the folders moved", n)
+	}
+	for _, c := range []struct {
+		src  string
+		want bool
+	}{
+		{`<link href="https://fonts.googleapis.com/css2?family=X" rel="stylesheet" />`, true},
+		{`<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />`, true},
+		{`<script src="//cdn.example.com/a.js"></script>`, true},
+		{`<img alt="" src={` + "`" + `https://img.example.com/b.svg` + "`" + `} />`, true},
+		{`@import url("https://fonts.example.com/c.css");`, true},
+		{`src: url(https://fonts.example.com/d.woff2);`, true},
+		{`<a href="https://github.com/AlphaWaveSystems/flutter-probe">GitHub</a>`, false},
+		{`<link rel="icon" type="image/svg+xml" href="/favicon.svg" />`, false},
+		{`<img src="/report.png" alt="" />`, false},
+	} {
+		if got := load.MatchString(c.src); got != c.want {
+			t.Errorf("load(%s) = %v, want %v", c.src, got, c.want)
+		}
 	}
 }

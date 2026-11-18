@@ -1,6 +1,6 @@
 ---
 // The frame of the landing page, pricing, Probe Cloud and the legal pages: head, nav, footer and the one shared stylesheet.
-// No script, cookie or analytics is added here; the only third-party request is the fonts stylesheet the landing page already used.
+// No script, cookie or analytics is added here, and nothing is loaded from another host: the fonts are the ones the reader's system has.
 // A legal page names its twin in the other language (other): the head then links both, and the footer links the legal pages in the page's language.
 import '../styles/site.css';
 
@@ -40,9 +40,6 @@ const legalLinks = lang === 'es'
   <meta name="twitter:image" content="https://flutterprobe.dev/og-image.png" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 </head>
 <body>
   <a class="skip" lang="en" href="#main">Skip to the content</a>

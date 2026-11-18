@@ -344,7 +344,7 @@ export function checkPage(file, raw, plans, apply) {
 
 // What stops src/data/legal.json from being published. The legal pages print its version and date and refer to "our address stated in
 // section 1", so a deploy with a draft version, an impossible date or no address would publish terms that point at nothing.
-// scripts/site_legal_pages_test.go checks the same file with the same rules.
+// scripts/site_legal_pages_test.go checks the same file and is stricter on two points: it wants the exact company name and support address.
 export function legalProblems(legal) {
   const out = [];
   const c = legal.company || {};
