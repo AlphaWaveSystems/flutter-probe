@@ -77,7 +77,7 @@ A failed step reports which line failed, what it was waiting for, and saves a sc
 Move the repeated steps into a recipe in `tests/recipes/auth.probe`:
 
 ```
-recipe "log in as" (email, password)
+recipe "sign in as" (email, password)
   open the app
   wait until "Log in" appears
   type "<email>" into #email
@@ -92,7 +92,7 @@ Use it from any test:
 use "recipes/auth.probe"
 
 test "a logged-in user sees their profile"
-  log in as "user@example.com" with "secret123"
+  sign in as "user@example.com" with "secret123"
   tap "Profile"
   see "user@example.com"
 ```

@@ -36,7 +36,7 @@ FlutterProbe uses a split architecture: a Go CLI runs on the host machine and se
 test "user grants camera permission and takes photo"
   open the app
   tap "Take Photo"
-  grant permission camera
+  allow permission "camera"
   see "Photo Preview"
 ```
 
@@ -71,7 +71,7 @@ This trade-off is deliberate. ProbeScript optimizes for readability by non-devel
 | Native dialog handling | Yes (NativeAutomator) | Yes (built-in commands) |
 | Widget-tree access | Yes (in-process) | Yes (via Dart agent) |
 | Custom finders | `$('text')` syntax | Text, key, semantic label, type |
-| Self-healing selectors | No | [Yes](/advanced/self-healing/) |
+| Advisory selector proposals on failure | No | [Yes](/advanced/self-healing/) |
 | Visual regression | No | [Yes](/advanced/visual-regression/) |
 | Test recording | No | [Yes](/tools/recording/) |
 | HTTP mocking | Manual setup | Built-in |
@@ -120,13 +120,13 @@ Reports include screenshots on failure, step-by-step timing, and pass/fail summa
 - Your entire team writes Dart and prefers staying in one language.
 - You need native automation but want to stay close to the standard Flutter test API.
 - Your test suite is small to medium (under 50 tests) and runs on local devices.
-- You do not need visual regression, self-healing selectors, or cloud-farm execution.
+- You do not need visual regression, advisory selector proposals, or cloud-farm execution.
 
 **Choose FlutterProbe if:**
 
 - Non-developers (QA, product, design) need to read or write tests.
 - You run tests on cloud device farms or need parallel execution across multiple devices.
-- You want visual regression testing and self-healing selectors to reduce maintenance.
+- You want visual regression testing and advisory selector proposals to reduce maintenance.
 - You are migrating from another framework (Maestro, Detox, Appium, Gherkin) and want automated conversion.
 - Fast iteration matters -- no recompilation when tests change.
 

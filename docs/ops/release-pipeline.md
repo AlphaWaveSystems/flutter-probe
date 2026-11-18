@@ -20,8 +20,10 @@ passed.
 
 1. **Merge.** A PR merges only after CI and the `review-agent.yml` check pass.
    The review agent runs an automated review and submits an approving review
-   on a clean verdict; without a configured reviewer it fails closed and the PR
-   waits for a human. It only reviews same-repository branches from owners,
+   on a clean verdict. Without a configured reviewer the `anthropic` and `local`
+   providers fail closed and the PR waits for a human; the default `oauth`
+   provider without its token skips the review with a notice and succeeds (no
+   review is posted, so nothing approves). It only reviews same-repository branches from owners,
    members and collaborators, reviews the diff (never a checkout of the PR
    branch) as untrusted input, and fails a branch that is behind `main` so a
    stale branch cannot silently revert what `main` merged since.
@@ -58,7 +60,11 @@ passed.
 ## Review agent providers
 
 The repository variable `REVIEW_PROVIDER` selects who reviews (default `oauth`).
-Whatever the mode, a missing credential fails the check; it is never skipped.
+A missing `anthropic` key or `local` URL fails the check. A missing `oauth` token
+(`CLAUDE_CODE_OAUTH_TOKEN`) does not: the review job skips every review step,
+writes a notice to the run and succeeds. No review is posted, so the check goes
+green without an approval; a human review is still needed wherever branch
+protection requires one. Set the secret to turn the automated review back on.
 
 | `REVIEW_PROVIDER` | Credential | Runs on | Can approve |
 | --- | --- | --- | --- |
