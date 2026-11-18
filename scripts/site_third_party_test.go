@@ -12,7 +12,8 @@ import (
 // from anywhere but https://flutterprobe.dev. This test finds such a load in the sources of the site and, when the site has been built, in the built pages.
 // A link the visitor clicks is a navigation, not a load, and is allowed.
 //
-// What it reads: website/src (layouts, pages, styles, documentation pages), website/public (the sample dashboard pages, SVG files) and the `head` entries of
+// What it reads: website/src (layouts, pages, styles, documentation pages), website/demo-templates (the committed source of the sample dashboard pages, which
+// the build generates into website/public/demo and which are not committed), website/public (SVG files and, when generated, those pages) and the `head` entries of
 // website/astro.config.mjs. A named root that does not exist fails the test (a renamed directory must not turn it into a silent pass). Code samples in
 // documentation pages (fenced blocks and inline code) are skipped on purpose: they show markup, they do not load it. What it does not see: a request made by
 // a script at run time (the site has none), and the built pages in a CI job that has no `website/dist` (the built-page test then skips). The Astro `head`
@@ -304,14 +305,14 @@ func sourceFiles(root string, exts ...string) (map[string]string, []string) {
 	return files, problems
 }
 
-// scanSite reads the sources of the site (srcRoot: layouts, pages, styles and documentation pages), its static files (publicRoot: the sample dashboard
-// pages and SVG files) and the head entries of its Astro configuration, and returns every load from another host, the files it read and what it could not read.
-func scanSite(srcRoot, publicRoot, configPath string) (read map[string]string, found, problems []string) {
+// scanSite reads the sources of the site (srcRoot: layouts, pages, styles and documentation pages), the templates of the sample dashboard (demoRoot), its
+// static files (publicRoot: SVG files and the generated sample dashboard pages, when they exist) and the head entries of its Astro configuration, and returns every load from another host, the files it read and what it could not read.
+func scanSite(srcRoot, demoRoot, publicRoot, configPath string) (read map[string]string, found, problems []string) {
 	read = map[string]string{}
 	for _, r := range []struct {
 		root string
 		exts []string
-	}{{srcRoot, []string{"astro", "css", "md", "mdx", "html"}}, {publicRoot, []string{"html", "svg", "css"}}} {
+	}{{srcRoot, []string{"astro", "css", "md", "mdx", "html"}}, {demoRoot, []string{"html"}}, {publicRoot, []string{"html", "svg", "css"}}} {
 		files, probs := sourceFiles(r.root, r.exts...)
 		problems = append(problems, probs...)
 		for p, text := range files {
@@ -347,9 +348,9 @@ func TestScanSiteReadsEveryRootAndFileKind(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	tree := func(plant bool) (src, public, cfg string) {
+	tree := func(plant bool) (src, demo, public, cfg string) {
 		dir := t.TempDir()
-		src, public, cfg = filepath.Join(dir, "src"), filepath.Join(dir, "public"), filepath.Join(dir, "astro.config.mjs")
+		src, demo, public, cfg = filepath.Join(dir, "src"), filepath.Join(dir, "demo-templates"), filepath.Join(dir, "public"), filepath.Join(dir, "astro.config.mjs")
 		ext := func(s string) string {
 			if plant {
 				return s
@@ -362,18 +363,19 @@ func TestScanSiteReadsEveryRootAndFileKind(t *testing.T) {
 		write(src, "content/docs/a.md", ext(`<img src="https://cdn.example.com/a.png">`)+"\n\n```html\n<script src=\"https://cdn.example.com/x.js\"></script>\n```\n")
 		write(src, "content/docs/b.mdx", ext("![b](https://cdn.example.com/b.png)\n"))
 		write(src, "content/docs/c.html", ext(`<script src="https://cdn.example.com/c.js"></script>`))
-		write(public, "demo/index.html", ext(`<script src="https://cdn.example.com/a.js"></script>`)+"<p>x</p>")
+		write(demo, "index.html", ext(`<script src="https://cdn.example.com/a.js"></script>`)+"<p>x</p>")
+		write(public, "demo/index.html", ext(`<script src="https://cdn.example.com/g.js"></script>`)+"<p>x</p>")
 		write(public, "og.svg", ext(`<svg><image href="https://cdn.example.com/a.png"/></svg>`)+"<svg/>")
 		write(public, "x.css", ext(`@font-face{src:url(https://cdn.example.com/x.woff2)}`)+"a{}")
 		write(filepath.Dir(cfg), "astro.config.mjs", "head: [\n"+ext(`{ tag: 'script', attrs: { src: 'https://cdn.example.com/a.js' } },`)+"\n]")
-		return src, public, cfg
+		return src, demo, public, cfg
 	}
-	src, public, cfg := tree(true)
-	_, found, problems := scanSite(src, public, cfg)
+	src, demo, public, cfg := tree(true)
+	_, found, problems := scanSite(src, demo, public, cfg)
 	if len(problems) > 0 {
 		t.Fatalf("problems in the planted tree: %v", problems)
 	}
-	for _, want := range []string{"Site.astro", "index.astro", "site.css", "a.md", "b.mdx", "c.html", "demo/index.html", "og.svg", "x.css", "astro.config.mjs"} {
+	for _, want := range []string{"Site.astro", "index.astro", "site.css", "a.md", "b.mdx", "c.html", "demo-templates/index.html", "public/demo/index.html", "og.svg", "x.css", "astro.config.mjs"} {
 		hit := false
 		for _, f := range found {
 			hit = hit || strings.Contains(f, want)
@@ -387,18 +389,21 @@ func TestScanSiteReadsEveryRootAndFileKind(t *testing.T) {
 			t.Errorf("a fenced sample in a documentation page was reported: %s", f)
 		}
 	}
-	src, public, cfg = tree(false)
-	if _, found, problems := scanSite(src, public, cfg); len(found) > 0 || len(problems) > 0 {
+	src, demo, public, cfg = tree(false)
+	if _, found, problems := scanSite(src, demo, public, cfg); len(found) > 0 || len(problems) > 0 {
 		t.Errorf("a clean tree reported %v %v", found, problems)
 	}
 	// A missing root says so in words: the walk of a missing directory fails too, but with a message about lstat.
-	if _, _, problems := scanSite(filepath.Join(t.TempDir(), "missing"), public, cfg); len(problems) == 0 || !strings.Contains(problems[0], "does not exist: this test reads it") {
+	if _, _, problems := scanSite(filepath.Join(t.TempDir(), "missing"), demo, public, cfg); len(problems) == 0 || !strings.Contains(problems[0], "does not exist: this test reads it") {
 		t.Errorf("a missing source root was not reported in words: %v", problems)
 	}
-	if _, _, problems := scanSite(src, filepath.Join(t.TempDir(), "missing"), cfg); len(problems) == 0 || !strings.Contains(problems[0], "does not exist: this test reads it") {
+	if _, _, problems := scanSite(src, demo, filepath.Join(t.TempDir(), "missing"), cfg); len(problems) == 0 || !strings.Contains(problems[0], "does not exist: this test reads it") {
 		t.Errorf("a missing public root was not reported in words: %v", problems)
 	}
-	if _, _, problems := scanSite(src, public, filepath.Join(t.TempDir(), "missing.mjs")); len(problems) == 0 {
+	if _, _, problems := scanSite(src, filepath.Join(t.TempDir(), "missing"), public, cfg); len(problems) == 0 || !strings.Contains(problems[0], "does not exist: this test reads it") {
+		t.Errorf("a missing demo templates root was not reported in words: %v", problems)
+	}
+	if _, _, problems := scanSite(src, demo, public, filepath.Join(t.TempDir(), "missing.mjs")); len(problems) == 0 {
 		t.Error("a missing Astro configuration was not reported")
 	}
 }
@@ -406,7 +411,7 @@ func TestScanSiteReadsEveryRootAndFileKind(t *testing.T) {
 // The real site. Each root is named and must exist, and each kind of file the detector reads must be present, so that a change of paths or an extension
 // dropped from the list cannot leave a part of the site unread.
 func TestWebsiteSourcesLoadNothingFromAnotherHost(t *testing.T) {
-	read, found, problems := scanSite("../website/src", "../website/public", "../website/astro.config.mjs")
+	read, found, problems := scanSite("../website/src", "../website/demo-templates", "../website/public", "../website/astro.config.mjs")
 	for _, p := range problems {
 		t.Error(p)
 	}
@@ -415,7 +420,7 @@ func TestWebsiteSourcesLoadNothingFromAnotherHost(t *testing.T) {
 		min            int
 	}{
 		{"layouts and pages", "website/src/", "astro", 4}, {"the stylesheet", "website/src/", "css", 1}, {"documentation pages", "website/src/", "md", 10},
-		{"the sample dashboard pages", "website/public/", "html", 1}, {"SVG files", "website/public/", "svg", 1},
+		{"the sample dashboard templates", "website/demo-templates/", "html", 3}, {"SVG files", "website/public/", "svg", 1},
 	} {
 		n := 0
 		for p := range read {
@@ -425,6 +430,12 @@ func TestWebsiteSourcesLoadNothingFromAnotherHost(t *testing.T) {
 		}
 		if n < want.min {
 			t.Errorf("read %d .%s file(s) under %s (%s), want at least %d: the paths or the extensions are wrong", n, want.ext, want.dir, want.what, want.min)
+		}
+	}
+	// The three pages of the sample dashboard are generated from these templates on every build; a renamed or missing template would leave a page unread.
+	for _, name := range []string{"index.html", "7-days.html", "90-days.html"} {
+		if _, ok := read[filepath.Join("../website/demo-templates", name)]; !ok {
+			t.Errorf("website/demo-templates/%s was not read: the sample dashboard needs it", name)
 		}
 	}
 	for _, f := range found {
