@@ -8,12 +8,13 @@ interface Props {
   description: string;
   path: string; // the page's own path, for the canonical link: "/pricing/"
   jsonLd?: object; // only facts that are true today
-  noindex?: boolean; // a draft page that search engines should not list
+  noindex?: boolean; // a page that search engines should not list
+  lang?: 'en' | 'es'; // the language of the page's own text; the frame stays English
 }
-const { title, description, path, jsonLd, noindex = false } = Astro.props;
+const { title, description, path, jsonLd, noindex = false, lang = 'en' } = Astro.props;
 const url = `https://flutterprobe.dev${path}`;
 ---
-<html lang="en">
+<html lang={lang}>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />

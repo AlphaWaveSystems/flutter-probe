@@ -1,22 +1,25 @@
 ---
-// The legal and plain-text pages (terms, privacy, refunds, contact, subprocessors, company) in the shared frame. They are drafts and say so.
+// The legal and company pages (terms, privacy, refunds, subprocessors, company, contact) in the shared frame, in English and in Spanish.
+// The version, the effective date and the company's details come from src/data/legal.json, so every page states the same ones.
 import Site from './Site.astro';
+import legal from '../data/legal.json';
 
 interface Props {
   title: string;
   description: string;
   path?: string;
-  updated?: string;
-  noindex?: boolean;
+  lang?: 'en' | 'es';
+  other?: string; // the path of the same page in the other language
 }
-const { title, description, path, updated = 'Last updated: 10 October 2026', noindex = false } = Astro.props;
+const { title, description, path, lang = 'en', other } = Astro.props;
 const here = path ?? Astro.url.pathname;
+const date = new Date(`${legal.effective}T00:00:00Z`).toLocaleDateString(lang === 'es' ? 'es-MX' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+const line = lang === 'es' ? `Versión ${legal.version}, vigente desde el ${date}` : `Version ${legal.version}, effective ${date}`;
 ---
-<Site title={`${title} - FlutterProbe`} description={description} path={here} noindex={noindex}>
-  <div class="prose">
+<Site title={`${title} - FlutterProbe`} description={description} path={here} lang={lang}>
+  <div class="prose" lang={lang}>
     <h1>{title}</h1>
-    <p class="updated">{updated}</p>
-    <div class="draft">Draft for review: this page is not final and does not take effect until it is confirmed.</div>
+    <p class="updated">{line}{other && <> &middot; <a href={other} hreflang={lang === 'es' ? 'en' : 'es'}>{lang === 'es' ? 'English version' : 'Versión en español'}</a></>}</p>
     <slot />
   </div>
 </Site>

@@ -1,44 +1,97 @@
 ---
 import Legal from '../layouts/Legal.astro';
+import LegalEntity from '../components/LegalEntity.astro';
 ---
-<Legal title="Terms of service" description="The terms for using the paid hosted FlutterProbe services.">
-  <p>These terms apply to the paid, hosted FlutterProbe services and this website, provided by Alpha Wave Systems S.A. de C.V. ("we"). By creating an account or using a paid service you agree to them.</p>
+<Legal title="Terms of service" description="The terms for the hosted FlutterProbe services and this website." other="/terminos/">
+  <p>This is a translation for your convenience. The <a href="/terminos/" hreflang="es">Spanish version</a> is the contract, and it prevails if the two differ.</p>
 
-  <h2>The free tools and their licenses</h2>
-  <p>The FlutterProbe command line tool is licensed under the Business Source License 1.1 and the Dart agent under the MIT license, as stated in the <a href="https://github.com/AlphaWaveSystems/flutter-probe">repository</a>. Those licenses, not these terms, govern your use of that software. These terms govern the hosted services.</p>
+  <h2>1. Who we are and what these terms cover</h2>
+  <p>The hosted FlutterProbe services (Probe Cloud and its dashboard, "the services") and this website are provided by:</p>
+  <LegalEntity />
+  <p>("we"). "You" are the person who creates an account or uses the services, and the company or organisation you act for. You confirm that you are at least 18 years old and that you may bind that company or organisation. You accept these terms when you create an account, upload to the services or pay for a plan. If you do not accept them, do not use the services.</p>
 
-  <h2>Accounts</h2>
-  <p>You are responsible for your account, for keeping your credentials safe and for everything done with them. Give us accurate information and keep it up to date.</p>
+  <h2>2. The free tools have their own licences</h2>
+  <p>The FlutterProbe command line tool is licensed under the Business Source License 1.1 and the Dart agent under the MIT license, as stated in the <a href="https://github.com/AlphaWaveSystems/flutter-probe">repository</a>. Those licences, not these terms, govern that software. The tools run on your machine and work without an account.</p>
 
-  <h2>Subscriptions and usage charges</h2>
+  <h2>3. Your account</h2>
+  <p>Give us accurate information and keep it up to date. Keep your sign-in details, licence keys and upload tokens secret. You are responsible for what is done with them until you tell us that they are lost or exposed. Tell us at once if you believe someone else has used your account.</p>
+
+  <h2>4. Plans and allowances</h2>
+  <p>The plans, what each includes and the number of test results each allows per month are shown on the <a href="/pricing/">pricing page</a>. A plan covers one team, with any number of members. There are no overage charges: uploads above a plan's monthly allowance may be refused until the next month starts or you change plan. The paid plans are for use in a trade, business or profession.</p>
+  <p>A feature that we label preview or beta may change or end at any time, and it may be less reliable than the rest of the services.</p>
+
+  <h2>5. Price, payment and automatic renewal</h2>
   <ul>
-    <li>Paid plans are billed monthly in advance and renew each month until you cancel.</li>
-    <li>Usage that is billed by the unit (for example relay minutes) is charged as it is used, at the rate shown when you sign up.</li>
-    <li>Payments are processed by Stripe. Prices exclude taxes unless stated.</li>
-    <li>Cancellation and refunds are described in the <a href="/refunds/">refund and cancellation policy</a>.</li>
+    <li><strong>A paid plan renews automatically every month.</strong> You pay the price of the plan in advance on the day you subscribe, and again on the same day of each following month (or on the last day of a shorter month), until you cancel.</li>
+    <li>The price, the billing period and the date of the next charge are shown at checkout before you pay. By completing checkout you expressly agree to these recurring charges.</li>
+    <li>We send a notice to the billing email address at least five calendar days before each renewal. You can cancel before the renewal at no cost.</li>
+    <li>Prices are in United States dollars. If your card or account uses another currency, your bank or card issuer converts the charge at its own rate.</li>
+    <li>Prices do not include taxes unless we say so. Where a tax applies, such as value added tax (IVA) for customers in Mexico, the amount is shown before you pay, and the total you see at checkout is the total you are charged.</li>
+    <li>Payments are processed by Stripe. We do not receive or store full card numbers.</li>
+    <li>We issue an invoice or receipt for each payment. If you need a Mexican tax invoice (CFDI), send us your tax details when you subscribe.</li>
+    <li>If a charge fails, we may try again, and we may suspend the paid features or move the team to the Free plan until the payment is made.</li>
+    <li>If you believe a charge is wrong, tell us within 60 days so that we can check and correct it. This does not shorten any period the law gives you.</li>
+  </ul>
+  <p>We may change the price of a plan. We tell you by email at least 30 days before, and the new price applies from the first renewal after that period. If you do not agree you can cancel before that renewal, at no cost.</p>
+
+  <h2>6. Cancellation and refunds</h2>
+  <p>You can cancel at any time, online, with immediate effect on future charges and with no penalty. The <a href="/refunds/">refund and cancellation policy</a> is part of these terms.</p>
+
+  <h2>7. Acceptable use</h2>
+  <p>You must not, and must not let anyone else:</p>
+  <ul>
+    <li>use the services to break the law or the rights of others;</li>
+    <li>upload content that you have no right to upload, or malicious code;</li>
+    <li>attack, probe or overload the services, or get around their limits, allowances or security controls;</li>
+    <li>use one team or account for several unrelated organisations to avoid a paid plan;</li>
+    <li>resell the services or offer them to third parties as your own, without our written agreement;</li>
+    <li>use the services where the law that applies to you or to us forbids it.</li>
   </ul>
 
-  <h2>Acceptable use</h2>
-  <p>Do not use the services to break the law, to attack or overload systems you do not own or have permission to test, to upload content you have no right to upload, to resell the services without our agreement, or to get around limits or security controls. We may suspend an account that does.</p>
+  <h2>8. Your content and your data</h2>
+  <p>You keep all rights in what you upload ("your content"). You give us permission to store, copy and process it only as needed to provide, secure and support the services.</p>
+  <p>You decide what you upload, and you are responsible for it. The uploaded reports contain what your tests and your configuration put into them: for example test names, error messages, device names, application identifiers and the properties you set. Use test accounts and test data. Do not upload sensitive personal data (such as health, biometric or financial data of real people), passwords or secrets. The command line tool removes some paths and values that look like secrets before an upload, but that filter is not complete and you must not rely on it.</p>
+  <p>Personal data is handled as the <a href="/privacy/">privacy notice</a> describes. For the personal data inside your content you are the party responsible for it, and we process it on your behalf and on your instructions. If you need a data processing agreement, ask us before you upload such data.</p>
+  <p>The services are not a backup. Keep your own copies of what matters to you. We delete content after the periods stated in the privacy notice.</p>
 
-  <h2>Your data</h2>
-  <p>You keep all rights to what you upload. You give us the permission needed to store and process it to provide the services. How we handle personal data is described in the <a href="/privacy/">privacy policy</a>.</p>
+  <h2>9. Our rights</h2>
+  <p>We and our licensors own the services, this website, the FlutterProbe name and its logos. These terms give you a right to use the services while your plan lasts, and nothing more. If you send us ideas or feedback, we may use them without owing you anything.</p>
 
-  <h2>Changes to the services and to these terms</h2>
-  <p>We may improve, change or retire features. We will tell account holders about material changes to these terms before they apply, and you may cancel if you do not agree.</p>
+  <h2>10. Suspension and ending</h2>
+  <p>You may stop using the services and cancel at any time. We may suspend or close an account that breaks these terms, that puts the services or other customers at risk, or whose payment has failed. Where the circumstances allow, we tell you first and give you a reasonable time to fix the problem. We may stop offering the services or a plan; if we do, we tell paying customers at least 30 days before and refund any period paid for and not provided.</p>
+  <p>Sections 8, 9 and 11 to 16 continue to apply after the agreement ends.</p>
 
-  <h2>No warranty</h2>
-  <p>The services are provided "as is" and "as available", without warranties of any kind, to the extent the law allows.</p>
+  <h2>11. No warranty</h2>
+  <p><strong>THE SERVICES ARE PROVIDED "AS IS" AND "AS AVAILABLE". TO THE EXTENT THE LAW ALLOWS, WE GIVE NO WARRANTY, EXPRESS OR IMPLIED, INCLUDING ANY WARRANTY OF MERCHANTABILITY, OF FITNESS FOR A PARTICULAR PURPOSE OR OF NON-INFRINGEMENT. WE DO NOT PROMISE THAT THE SERVICES WILL BE UNINTERRUPTED OR FREE OF ERRORS, OR THAT THEIR RESULTS (INCLUDING VERDICTS, FLAKY-TEST FLAGS AND TRENDS) ARE COMPLETE OR CORRECT.</strong> You remain responsible for deciding whether your software is ready to release.</p>
 
-  <h2>Limit of liability</h2>
-  <p>To the extent the law allows, we are not liable for indirect or consequential losses, and our total liability for any claim is limited to the amount you paid us for the services in the twelve months before the claim.</p>
+  <h2>12. Limit of liability</h2>
+  <p><strong>TO THE EXTENT THE LAW ALLOWS:</strong></p>
+  <ul>
+    <li><strong>WE ARE LIABLE ONLY FOR DAMAGE THAT IS THE IMMEDIATE AND DIRECT RESULT OF OUR BREACH. WE ARE NOT LIABLE FOR LOST PROFITS, LOST REVENUE, LOST BUSINESS, LOST OR DAMAGED DATA, OR INDIRECT OR CONSEQUENTIAL LOSS.</strong></li>
+    <li><strong>OUR TOTAL LIABILITY FOR ALL CLAIMS ARISING IN ANY PERIOD OF TWELVE MONTHS IS LIMITED TO THE AMOUNT YOU PAID US FOR THE SERVICES IN THE TWELVE MONTHS BEFORE THE EVENT THAT GAVE RISE TO THE CLAIM, OR 100 UNITED STATES DOLLARS, WHICHEVER IS GREATER.</strong></li>
+  </ul>
+  <p>Nothing in these terms excludes or limits liability for wilful misconduct (dolo) or bad faith, or any liability or right that the law does not allow to be excluded or limited.</p>
 
-  <h2>Ending the agreement</h2>
-  <p>You may cancel at any time. We may end or suspend an account that breaks these terms. Sections that by their nature should continue, such as liability and governing law, continue after the agreement ends.</p>
+  <h2>13. Your responsibility towards us</h2>
+  <p>If a third party makes a claim against us because of your content, or because you used the services against section 7, you will compensate us for the damage and the reasonable costs that the claim causes us, to the extent the law allows. We will tell you about the claim promptly.</p>
 
-  <h2>Governing law</h2>
-  <p>These terms are governed by the laws of Mexico.</p>
+  <h2>14. Events outside our control</h2>
+  <p>Neither party is liable for a failure or delay caused by an event outside its reasonable control (caso fortuito or fuerza mayor), such as a failure of the internet, of a hosting or payment provider, an attack on the network, an act of authority or a natural disaster. This does not release you from paying for periods in which the services were provided.</p>
 
-  <h2>Contact</h2>
-  <p>Questions about these terms: <a href="mailto:support@alphawavesystems.com">support@alphawavesystems.com</a>.</p>
+  <h2>15. Changes to the services and to these terms</h2>
+  <p>We may improve or change the services. We may change these terms for a good reason, such as a change in the law, in the services or in our providers. We publish the new version here with its number and date, and we tell account holders by email at least 30 days before it applies. If you do not agree you may cancel before that date at no cost; the earlier version applies to you until then. If you keep using the services after that date, the new version applies.</p>
+
+  <h2>16. Law and courts</h2>
+  <p>These terms are governed by the federal laws of the United Mexican States and, where state law applies, by the laws of the State of Jalisco.</p>
+  <p>For any dispute about these terms or the services, the parties expressly submit to the competent courts of the judicial district of our address in the State of Jalisco, Mexico, stated in section 1, and clearly and conclusively waive any other venue that could correspond to them because of their present or future addresses or for any other reason.</p>
+  <p>If you are a consumer, this section does not take away rights that the law of your place of residence gives you and that cannot be waived, including the right to bring your claim before the consumer authority or the courts of your own address. Consumers in Mexico may go to the Procuraduría Federal del Consumidor (PROFECO).</p>
+
+  <h2>17. Notices</h2>
+  <p>We send notices to the email address of your account or your billing email address. A notice counts as received when it enters the mail system of that address. Send notices to us at the email address in section 1.</p>
+
+  <h2>18. General</h2>
+  <p>These terms, the refund and cancellation policy, the privacy notice and what you accepted at checkout are the whole agreement about the services. If a court finds a part of these terms invalid, the rest stays in force. If we do not enforce a right at once, we keep it. You may not transfer this agreement without our written consent; we may transfer it together with the business that provides the services, and we will tell you if we do.</p>
+
+  <h2>19. Contact</h2>
+  <p>Questions, complaints and claims: <a href="mailto:support@alphawavesystems.com">support@alphawavesystems.com</a>, or the address in section 1.</p>
 </Legal>

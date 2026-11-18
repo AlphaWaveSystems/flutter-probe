@@ -1,0 +1,18 @@
+---
+// The company's identification as the legal pages print it: name, address, telephone and email, from src/data/legal.json.
+// An empty field is left out; scripts/site_legal_pages_test.go refuses a release in which the address is empty.
+import legal from '../data/legal.json';
+
+interface Props {
+  lang?: 'en' | 'es';
+}
+const { lang = 'en' } = Astro.props;
+const c = legal.company;
+const es = lang === 'es';
+---
+<p class="entity">
+  <strong>{c.name}</strong><br />
+  {c.address && <>{c.address}<br /></>}
+  {c.phone && <>{es ? 'Teléfono' : 'Telephone'}: {c.phone}<br /></>}
+  {es ? 'Correo electrónico' : 'Email'}: <a href={`mailto:${c.email}`}>{c.email}</a>
+</p>

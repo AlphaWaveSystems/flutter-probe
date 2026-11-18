@@ -13,10 +13,7 @@ const ebnf = readGrammar('./grammars/ebnf.tmLanguage.json');
 export default defineConfig({
   site: 'https://flutterprobe.dev',
   integrations: [
-    // The draft legal pages stay out of the sitemap until the lawyer review (they also carry noindex).
-    sitemap({
-      filter: (page) => !/\/(subprocessors|company)\/$/.test(page),
-    }),
+    sitemap(),
     starlight({
       title: 'FlutterProbe',
       description: 'Flutter E2E testing framework — write tests in plain English, execute via direct widget-tree access. Free to use: source-available CLI (BSL 1.1), MIT agent.',
