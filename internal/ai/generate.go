@@ -17,8 +17,7 @@ const (
 	maxTokens     = 4096
 )
 
-// Generator calls the Claude API for LLM-powered test generation and
-// self-healing selector suggestions.
+// Generator calls the Claude API for LLM-powered test generation.
 type Generator struct {
 	APIKey  string
 	Model   string
