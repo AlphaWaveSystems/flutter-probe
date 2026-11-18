@@ -119,6 +119,9 @@ jobs:
       - name: Contrast tool tests
         working-directory: studio/frontend
         run: npm run test:contrast
+      - name: Contrast check (every text pair is 4.5:1 or on the allowlist)
+        working-directory: studio/frontend
+        run: npm run check:contrast
       - name: ProbeScript dictionary is up to date
         working-directory: studio/frontend
         run: npm run check:probescript
