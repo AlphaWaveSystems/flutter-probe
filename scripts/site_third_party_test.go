@@ -302,15 +302,6 @@ func sourceFiles(root string, exts ...string) (map[string]string, []string) {
 	return files, problems
 }
 
-func countExt(files map[string]string, ext string) (n int) {
-	for p := range files {
-		if strings.HasSuffix(p, "."+ext) {
-			n++
-		}
-	}
-	return n
-}
-
 // scanSite reads the sources of the site (srcRoot: layouts, pages, styles and documentation pages), its static files (publicRoot: the sample dashboard
 // pages and SVG files) and the head entries of its Astro configuration, and returns every load from another host, the files it read and what it could not read.
 func scanSite(srcRoot, publicRoot, configPath string) (read map[string]string, found, problems []string) {
