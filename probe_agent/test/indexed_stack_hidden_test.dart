@@ -271,4 +271,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(ProbeFinder.instance.hasSecretField(), isTrue);
   });
+
+  testWidgets('a password field on a page before or after the shown one is not a field on screen', (tester) async {
+    for (final shown in [0, 1, 2]) {
+      await tester.pumpWidget(_app(IndexedStack(index: shown, children: [
+        for (var i = 0; i < 3; i++) i == 1 ? const TextField(obscureText: true) : Text('Page $i'),
+      ])));
+      await tester.pumpAndSettle();
+      expect(ProbeFinder.instance.hasSecretField(), shown == 1, reason: 'the field is on page 1 and the stack shows page $shown');
+    }
+  });
 }
