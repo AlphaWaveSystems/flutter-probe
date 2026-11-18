@@ -86,7 +86,7 @@ test "user can log in"
   see "Welcome"
 ```
 
-**Strengths:** No Dart test code to maintain, human-readable scripts that non-developers can review, direct widget-tree access without a WebDriver layer, built-in [visual regression](/advanced/visual-regression/), [self-healing selectors](/advanced/self-healing/), support for five cloud farms, and parallel execution via `--parallel` and `--shard` flags.
+**Strengths:** No Dart test code to maintain, human-readable scripts that non-developers can review, direct widget-tree access without a WebDriver layer, built-in [visual regression](/advanced/visual-regression/), [advisory selector proposals for failed steps](/advanced/self-healing/), support for five cloud farms, and parallel execution via `--parallel` and `--shard` flags.
 
 **Limitations:** Requires installing a separate CLI and embedding the Dart agent. ProbeScript is purpose-built for E2E flows, so complex programmatic logic may need [hooks](/probescript/hooks/) or [recipes](/probescript/recipes/).
 
@@ -99,7 +99,7 @@ test "user can log in"
 | Cloud farm support | Manual setup | Limited | 5 providers implemented, [not yet verified on a live account](/tools/cloud-farms/) |
 | CI reporting | DIY | DIY | Built-in HTML/JUnit reports |
 | Visual regression | No | No | Yes |
-| Self-healing selectors | No | No | Yes |
+| Advisory selector proposals on failure | No | No | Yes |
 | Migration tooling | N/A | N/A | Imports from 7 formats |
 
 ## When to Use Each

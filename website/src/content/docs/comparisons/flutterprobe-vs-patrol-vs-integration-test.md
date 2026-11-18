@@ -20,7 +20,7 @@ This comparison is based on the state of each tool as of early 2026.
 | **Native OS interaction** | No | Yes | Yes |
 | **Cloud device farms** | Firebase Test Lab (deprecated by Google) | Firebase Test Lab (deprecated by Google) | 5 providers implemented, [not yet verified live](/tools/cloud-farms/) |
 | **CI/CD parallel execution** | Manual sharding | Manual sharding | Built-in --shard |
-| **Self-healing selectors** | No | No | Yes |
+| **Advisory selector proposals on failure** | No | No | Yes |
 | **Visual regression** | No | No | Yes |
 | **Test recording** | No | No | Yes |
 | **HTTP mocking** | Manual setup | Manual setup | Built-in |
@@ -160,6 +160,6 @@ FlutterProbe has no converter for `integration_test` or Patrol suites: those are
 
 **Choose Patrol if** you need native OS interaction (permissions, notifications, system dialogs) and want to stay in the Dart ecosystem. Patrol is well-maintained and has a growing community.
 
-**Choose FlutterProbe if** you need fast CI execution, non-Dart test syntax for cross-functional teams, cloud device farm support beyond Firebase, or features like visual regression testing, self-healing selectors, and [test recording](/tools/recorder/). FlutterProbe's out-of-process architecture provides structural advantages for larger test suites and CI-heavy workflows.
+**Choose FlutterProbe if** you need fast CI execution, non-Dart test syntax for cross-functional teams, cloud device farm support beyond Firebase, or features like visual regression testing, advisory selector proposals, and [test recording](/tools/recorder/). FlutterProbe's out-of-process architecture provides structural advantages for larger test suites and CI-heavy workflows.
 
 The tools are not mutually exclusive. Some teams use `integration_test` for a small set of smoke tests that live alongside the app code and FlutterProbe for the broader E2E regression suite. Choose based on your team's specific needs, CI infrastructure, and scale.

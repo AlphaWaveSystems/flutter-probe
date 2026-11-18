@@ -51,7 +51,7 @@ jobs:
         with:
           flutter-version: '3.27.0'
       - name: Install FlutterProbe
-        run: go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest
+        run: go install github.com/alphawavesystems/flutter-probe/cmd/probe@latest
       - name: Build and test
         run: |
           flutter build apk --debug --dart-define=PROBE_AGENT=true
@@ -146,7 +146,7 @@ When a test fails in CI, the combination of the failure screenshot, the step-lev
 Automation is not a one-time setup. Test suites require ongoing maintenance:
 
 - **Keep tests independent.** Each test should set up its own state and not depend on other tests having run first. FlutterProbe's [hooks system](/advanced/hooks/) helps with setup and teardown.
-- **Use self-healing selectors.** UI changes break tests that rely on brittle selectors. FlutterProbe's self-healing selectors automatically adapt to minor widget tree changes, reducing maintenance overhead.
+- **Prefer stable selectors, and read the failure.** UI changes break tests that rely on brittle selectors, so give widgets a `ValueKey` and select by `#key`. When a step fails, FlutterProbe lists the texts and keys on screen, and `--ai-heal` adds an advisory replacement that you apply yourself.
 - **Review flaky tests immediately.** A flaky test is worse than no test because it trains the team to ignore failures. Quarantine flaky tests, fix them, or delete them.
 - **Track test execution time.** If your suite grows past 15 minutes even with sharding, it is time to prune low-value tests or split into tiers (smoke, regression, full).
 
