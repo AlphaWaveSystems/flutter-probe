@@ -179,7 +179,8 @@ func init() {
 	f.Int("visual-pixel-delta", 0, "per-pixel color distance threshold 0–255 (default: 8)")
 
 	// Cloud integration
-	f.Bool("cloud", false, "upload test results to FlutterProbe Cloud after run")
+	f.Bool("cloud", false, "not implemented: probe test refuses it (it used to be accepted and ignored; a configured cloud token and URL upload the results)")
+	_ = f.MarkHidden("cloud")
 	f.String("cloud-token", "", "API key for FlutterProbe Cloud authentication")
 	f.String("cloud-url", "", "cloud API base URL (must be set via this flag or cloud.url in probe.yaml)")
 
@@ -254,7 +255,24 @@ func localeDeviceContext(ctx context.Context, dm *device.Manager, cfg *config.Co
 // buildCompositeRunnerFn is buildCompositeRunner. It is a variable so a test can see the clear gate a composite run is given.
 var buildCompositeRunnerFn = buildCompositeRunner
 
+// errCloudNotImplemented is what `probe test --cloud` ends with. The flag was registered with the help text "upload
+// test results to FlutterProbe Cloud after run" but nothing read it: the upload is decided by a configured cloud token
+// and URL (--cloud-token, --cloud-url or cloud.token, cloud.url), never by this flag.
+var errCloudNotImplemented = errors.New("--cloud is not implemented: it never started an upload. " +
+	"Results are uploaded when a cloud token and URL are configured (--cloud-token and --cloud-url, or cloud.token and cloud.url in probe.yaml)")
+
+// refuseCloudFlag returns errCloudNotImplemented when --cloud was given, before anything touches a device.
+func refuseCloudFlag(cmd *cobra.Command) error {
+	if on, _ := cmd.Flags().GetBool("cloud"); on {
+		return errCloudNotImplemented
+	}
+	return nil
+}
+
 func runTests(cmd *cobra.Command, args []string) (retErr error) {
+	if err := refuseCloudFlag(cmd); err != nil {
+		return err
+	}
 	// probe_version in probe.yaml must be met by the running CLI before anything starts (see checkProbeVersion).
 	pinCfg, err := loadConfig(cmd)
 	if err != nil {
