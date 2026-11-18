@@ -79,14 +79,6 @@ probe report --input reports/results.json -o reports/report.html --open
 probe test tests/ --format junit -o reports/results.xml
 ```
 
-## 7. Watch Mode
-
-Re-run tests automatically when `.probe` files change:
-
-```bash
-probe test tests/ --watch
-```
-
 ## What to Read Next
 
 - [ProbeScript Syntax](/probescript/syntax/) — full language reference

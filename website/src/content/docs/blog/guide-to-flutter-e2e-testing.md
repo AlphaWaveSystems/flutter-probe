@@ -40,7 +40,7 @@ brew tap AlphaWaveSystems/tap
 brew install probe
 
 # Or via go install (good for CI)
-go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest
+go install github.com/alphawavesystems/flutter-probe/cmd/probe@latest
 ```
 
 Add the FlutterProbe Dart agent to your app's dev dependencies:
@@ -116,7 +116,7 @@ test "User can reset password"
   see "Check your email"
 ```
 
-Tests are independent. FlutterProbe resets the app state between tests using configurable [hooks](/advanced/hooks/), so the order does not matter.
+Tests are independent. FlutterProbe resets the app state between tests using configurable [hooks](/probescript/hooks/), so the order does not matter.
 
 ## CI/CD Integration
 
@@ -134,7 +134,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.27.0'
-      - run: go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest
+      - run: go install github.com/alphawavesystems/flutter-probe/cmd/probe@latest
       - run: flutter build apk --debug --dart-define=PROBE_AGENT=true
       - run: probe test tests/ --format junit -o results.xml -y
       - uses: dorny/test-reporter@v1
@@ -207,7 +207,7 @@ probe test tests/ --screenshot-on-failure --capture-logs
 
 **Testing implementation details.** E2E tests should verify user-visible behavior, not internal widget structure. If you are asserting on widget keys or specific widget types deep in the tree, you are testing implementation details that will break on refactoring.
 
-**Skipping test maintenance.** UI changes break E2E tests. Budget time for test maintenance in every sprint. FlutterProbe's [self-healing selectors](/advanced/self-healing/) reduce this burden but do not eliminate it entirely.
+**Skipping test maintenance.** UI changes break E2E tests. Budget time for test maintenance in every sprint. FlutterProbe's failure messages and [advisory selector proposals](/advanced/self-healing/) point at the likely fix, but you still update the test.
 
 ## Next Steps
 

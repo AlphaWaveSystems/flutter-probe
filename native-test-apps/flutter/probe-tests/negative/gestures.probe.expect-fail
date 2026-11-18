@@ -1,0 +1,40 @@
+# The negative variants of probe-tests/widgets/gestures.probe: every test below asserts something WRONG, and every one must FAIL.
+# They show that the positive suite can fail, and why. This file does not end in .probe, so `probe test` never picks it up in a directory run. To run it:
+#
+#   cp probe-tests/negative/gestures.probe.expect-fail /tmp/gestures-negative.probe
+#   probe test /tmp/gestures-negative.probe --device <serial> -y       # (the gestures build, the same probe.yaml as for gestures.probe)
+#
+# Expected: 0 passed, 6 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+
+before each test
+  restart the app
+  wait until #wf_g_state appears
+
+# Expected: see "Tap: 2": Expected to see "text("Tap: 2")" but it was not found (one tap is one tap)
+test "N1 one tap counted twice"
+  tap "Tap me"
+  see "Tap: 2"
+
+# Expected: see "Double: 1": Expected to see "text("Double: 1")" but it was not found (a single tap is not a double tap)
+test "N2 a single tap counted as a double tap"
+  tap "Double me"
+  see "Double: 1"
+
+# Expected: see "Outer: 1": Expected to see "text("Outer: 1")" but it was not found (the inner detector takes the tap)
+test "N3 the outer detector got the nested tap"
+  tap "Nested"
+  see "Outer: 1"
+
+# Expected: see "Single: 1": Expected to see "text("Single: 1")" but it was not found (the double tap is not also a tap)
+test "N4 a double tap also counted as a tap"
+  double tap "Tap or double"
+  see "Single: 1"
+
+# Expected: see "Hold: 1": Expected to see "text("Hold: 1")" but it was not found (a tap is not a long press)
+test "N5 a tap counted as a long press"
+  tap "Hold me"
+  see "Hold: 1"
+
+# Expected: tap "Missing gesture": Widget not found
+test "N6 a text that is not on the screen"
+  tap "Missing gesture"

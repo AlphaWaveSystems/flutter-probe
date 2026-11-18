@@ -114,7 +114,7 @@ internal/
   config/               probe.yaml handling
   cloud/                Cloud provider integration
   report/               HTML report generation
-  ai/                   Self-healing + test generation
+  ai/                   Test generation + selector proposals
   visual/               Visual regression testing
   plugin/               Custom command plugins
   migrate/              Maestro YAML migration (legacy)

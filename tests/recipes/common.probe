@@ -10,7 +10,7 @@ recipe "navigate to keypad"
   wait 2 seconds
   see "Enter the 10-digit number"
 
-recipe "go back to main menu"
+recipe "return to the main menu"
   go back
   wait 1 seconds
   see "Home"

@@ -4,7 +4,7 @@
 #   cp probe-tests/negative/textinput.probe.expect-fail /tmp/textinput-negative.probe
 #   probe test /tmp/textinput-negative.probe --device <serial> -y     # (the textinput build, the same probe.yaml as for textinput.probe)
 #
-# Expected: 0 passed, 8 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+# Expected: 0 passed, 10 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
 # Each test must fail at its own step, with the message in its comment. A failure at the `wait until` of `before each test` (a timeout
 # waiting for the screen's last element) is NOT the expected failure: the screen never showed, and the run proves nothing.
 
@@ -48,3 +48,12 @@ test "N7 don't see is empty fails on an empty field"
 test "N8 don't see is filled fails on a filled field"
   type "x" into #wf_textfield
   don't see #wf_textfield is filled
+
+# Expected: type "x" into #wf_bottom_field: Widget not found (the field is below the fold of a lazy list and not built before a scroll)
+test "N9 a field below the fold is not typed into without a scroll step"
+  type "x" into #wf_bottom_field
+
+# Expected: see "Lower field: end": Expected to see "text("Lower field: end")" but it was not found (the field was scrolled to but nothing was typed)
+test "N10 the mirror of the field below the fold is empty before typing"
+  scroll down until #wf_bottom_field appears
+  see "Lower field: end"

@@ -77,13 +77,21 @@ with examples:
 
 ## Combining with Recipes
 
-Data-driven tests work seamlessly with recipes:
+A recipe called from a data-driven test reads the same `<column>` names as the test. Give such a recipe no parameters of its own:
+
+```
+recipe "sign in with the example"
+  open the app
+  type "<email>" into #email
+  type "<password>" into #password
+  tap #loginButton
+```
 
 ```
 use "recipes/auth.probe"
 
 test "role-based access"
-  log in as <email> with <password>
+  sign in with the example
   see "<page>"
 
 with examples:
@@ -92,6 +100,10 @@ with examples:
   "user@test.com"     "user123"    "Dashboard"
   "guest@test.com"    "guest123"   "Read Only"
 ```
+
+`probe lint` on the recipe file alone warns that `<email>` and `<password>` are not defined, because that file has no examples table; lint the test file that uses the recipe (it reads the recipe through `use` or the recipes folder and sees the columns), and the warnings are gone.
+
+Do not pass a column to a recipe as an argument (`sign in as "<email>" with "<password>"`) and do not give a recipe a parameter with the name of a column. A call binds its argument text as it is, so a parameter named `email` receives the text `<email>` and replaces the row's value, and the step then types `<email>` literally.
 
 ## Loading Data from CSV
 

@@ -27,7 +27,7 @@ body:
     id: ci
     attributes:
       label: CI provider
-      description: The upload client is built for GitHub Actions runs.
+      description: The upload client is built for GitHub Actions runs, and other CI systems are not supported for uploads yet. If you use another one, choose Other and tell us what you use under "What you test today".
       options:
         - GitHub Actions
         - Other
@@ -49,6 +49,27 @@ body:
       description: Your app's main flows, how you test them now, and what you want to see in test reports.
     validations:
       required: true
+  - type: input
+    id: team-size
+    attributes:
+      label: Team size (optional)
+      description: How many people work on the app, for example 4 developers. You can leave it empty.
+    validations:
+      required: false
+  - type: dropdown
+    id: source
+    attributes:
+      label: How did you hear about us (optional)
+      description: You can leave it empty.
+      options:
+        - Search
+        - GitHub
+        - pub.dev
+        - A person
+        - A post
+        - Other
+    validations:
+      required: false
   - type: input
     id: email
     attributes:

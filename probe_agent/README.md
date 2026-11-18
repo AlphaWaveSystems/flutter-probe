@@ -31,7 +31,7 @@ brew tap AlphaWaveSystems/tap
 brew install probe
 
 # Option B: Go install (requires Go 1.26.10+)
-go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest
+go install github.com/alphawavesystems/flutter-probe/cmd/probe@latest
 
 # Option C: Download from GitHub Releases (all platforms)
 # https://github.com/AlphaWaveSystems/flutter-probe/releases/latest
@@ -48,7 +48,7 @@ probe version
 ```yaml
 # pubspec.yaml
 dev_dependencies:
-  flutter_probe_agent: ^0.27.0
+  flutter_probe_agent: ^0.26.1
 ```
 
 Initialize in your `main.dart`:

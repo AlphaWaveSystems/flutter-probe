@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -205,51 +206,22 @@ var generateFromRecordingCmd = &cobra.Command{
 	},
 }
 
+// healNotImplemented is what `probe heal` says. The command used to print two fixed suggestions for files it never
+// read and then claim "2 selectors healed" with nothing patched, so it now refuses and points at what exists.
+const healNotImplemented = "probe heal is not implemented: it does not scan files and never changed one. " +
+	"Use `probe test --ai-heal` for an advisory proposed selector in the JSON report, or Studio's Suggest a fix"
+
 var healCmd = &cobra.Command{
-	Use:   "heal [file]",
-	Short: "Repair broken selectors using the live widget tree",
-	Long: `probe heal scans a .probe file for selectors that no longer match
-widgets in the running app and proposes repairs using fuzzy matching
-and AI semantic analysis.`,
-	Example: `  probe heal tests/login.probe
-  probe heal tests/ --apply    # auto-apply suggestions`,
+	Use:    "heal [file]",
+	Short:  "Not implemented (use probe test --ai-heal)",
+	Hidden: true,
+	Long: `probe heal is not implemented. An earlier version printed suggestions that did not come from your files and
+changed nothing. For a proposed replacement selector after a failed step, run probe test --ai-heal (it needs an
+ai: block in probe.yaml; see https://flutterprobe.dev/tools/ai/#selector-proposals-for-failed-steps), or use
+Suggest a fix in Studio.`,
+	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		applyFixes, _ := cmd.Flags().GetBool("apply")
-
-		targets := args
-		if len(targets) == 0 {
-			targets = []string{"tests"}
-		}
-		_ = targets
-
-		fmt.Println("  Self-healing selector analysis...")
-		fmt.Println()
-
-		healer := ai.NewSelfHealer()
-		_ = healer
-
-		// Demonstration output (real impl would connect to agent + parse files)
-		fmt.Println("  Scanning .probe files for potentially broken selectors...")
-		fmt.Println()
-		fmt.Println(`  SUGGESTION  tests/checkout.probe:14`)
-		fmt.Println(`    "Proceed to Checkout"  →  "Continue to Payment"`)
-		fmt.Println(`    Strategy: text_fuzzy (87% confidence)`)
-		fmt.Println(`    Reason: Text changed — widget still present at same position`)
-		fmt.Println()
-		fmt.Println(`  SUGGESTION  tests/profile.probe:8`)
-		fmt.Println(`    #save_button  →  #submit_btn`)
-		fmt.Println(`    Strategy: key_partial (92% confidence)`)
-		fmt.Println(`    Reason: Key suffix changed from 'button' to 'btn'`)
-		fmt.Println()
-
-		if applyFixes {
-			fmt.Println("  Applying suggestions...")
-			statusOK(os.Stdout, "2 selectors healed")
-		} else {
-			fmt.Println("  Run with --apply to automatically patch the .probe files.")
-		}
-
-		return nil
+		return errors.New(healNotImplemented)
 	},
 }
 
@@ -266,7 +238,7 @@ func init() {
 	generateFromRecordingCmd.Flags().String("api-key", "", "Anthropic API key (overrides probe.yaml ai.api_key)")
 	generateFromRecordingCmd.Flags().String("model", "", "Claude model name")
 
-	healCmd.Flags().Bool("apply", false, "automatically apply suggested fixes")
+	healCmd.Flags().Bool("apply", false, "not implemented")
 
 	generateCmd.AddCommand(generatePromptCmd)
 	generateCmd.AddCommand(generateFromRecordingCmd)

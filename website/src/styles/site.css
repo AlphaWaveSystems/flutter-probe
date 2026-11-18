@@ -15,8 +15,8 @@
   --purple: #a78bfa;
   --amber: #f5b731;
   --coral: #ff8a80;
-  --font: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
   --gutter: clamp(1rem, 4vw, 2rem);
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -75,6 +75,7 @@ footer { border-top: 1px solid var(--border); max-width: 1200px; margin: 0 auto;
 .hero h1 .g { background: linear-gradient(135deg, var(--accent) 0%, #6ee7b7 50%, var(--accent) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 .hero .sub { font-size: 1.1rem; color: var(--muted); max-width: 56ch; margin: 0 auto 2rem; }
 .hero .cta { margin-bottom: 1.5rem; }
+.hero .cta-alt { color: var(--muted); font-size: 0.9rem; max-width: 56ch; margin: -0.75rem auto 1.5rem; }
 .cmd-line { display: inline-flex; max-width: 100%; align-items: center; gap: 0.6rem; font: 0.85rem var(--mono); color: var(--muted); background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.9rem; overflow-x: auto; white-space: nowrap; }
 .cmd-line b { color: var(--text); font-weight: 500; }
 
