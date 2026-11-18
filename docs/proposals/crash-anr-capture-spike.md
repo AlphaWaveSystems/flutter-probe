@@ -6,9 +6,9 @@
 
 | | Android | iOS |
 |---|---|---|
-| Device | emulator `emulator-5600` (AVD `ProbeWebViewSpike`, `sdk_gphone64_arm64`, Android 15, API 35, build `google/sdk_gphone64_arm64/emu64a:15/AE3A.240806.043/12960925:userdebug/dev-keys`) | simulator `ProbeCrashSpike-iPhone17`, UDID `7CBE6910-6286-44FC-BC18-97A7EDF3A1DF` (iPhone 17 Pro, iOS 26.5), created for this spike |
+| Device | the emulator `ProbeWebViewSpike` (`sdk_gphone64_arm64`, Android 15, API 35, build `google/sdk_gphone64_arm64/emu64a:15/AE3A.240806.043/12960925:userdebug/dev-keys`) | the simulator `ProbeCrashSpike-iPhone17` (iPhone 17 Pro, iOS 26.5), created for this spike |
 | App | a throwaway fixture app (`dev.probe.webviewfixture`) that can throw an uncaught exception or send itself SIGSEGV on a launch flag | a throwaway Flutter fixture (`dev.probe.pkfix`) |
-| Commands | every adb call names the device: `adb -s emulator-5600 ...`; no forward, no `--remove-all` | `xcrun simctl ... 7CBE6910-...`; the app's pid from `simctl launch` |
+| Commands | every adb call names the device: `adb -s <the emulator> ...`; no forward, no `--remove-all` | `xcrun simctl ... <the simulator>`; the app's pid from `simctl launch` |
 
 Only these two devices were used; both were shut down afterwards.
 
