@@ -173,14 +173,17 @@ func declaredModules(t *testing.T) []string {
 	return mods
 }
 
-func TestGoInstallLinesUseTheDeclaredModulePath(t *testing.T) {
-	mods := declaredModules(t)
+// goInstallProblems walks root and returns the `go install` targets that name this organisation with a module path no go.mod declares,
+// as "relative/path: target", and the number of files it read. The files it reads are the documents, workflows, scripts, Makefiles
+// (Makefile, makefile, GNUmakefile, *.mk) and container files (Containerfile, Dockerfile*) of the tree; CHANGELOG.md is skipped (history:
+// it may quote what a page once said), and so are .git, .worktrees, node_modules and research.
+func goInstallProblems(root string, mods []string) ([]string, int, error) {
 	exts := map[string]bool{".md": true, ".mdx": true, ".astro": true, ".yml": true, ".yaml": true, ".txt": true, ".sh": true, ".json": true, ".mk": true}
 	named := map[string]bool{"Makefile": true, "makefile": true, "GNUmakefile": true, "Containerfile": true} // files with no extension that hold commands
-	skipFiles := map[string]bool{"CHANGELOG.md": true}                                                       // history: it may quote what a page once said
+	skipFiles := map[string]bool{"CHANGELOG.md": true}
 	scanned := 0
 	var problems []string
-	err := filepath.WalkDir(goInstallRoot, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -200,19 +203,87 @@ func TestGoInstallLinesUseTheDeclaredModulePath(t *testing.T) {
 		}
 		scanned++
 		for _, bad := range badGoInstallTargets(string(b), mods) {
-			problems = append(problems, filepath.ToSlash(strings.TrimPrefix(path, goInstallRoot+string(filepath.Separator)))+": "+bad)
+			problems = append(problems, filepath.ToSlash(strings.TrimPrefix(path, root+string(filepath.Separator)))+": "+bad)
 		}
 		return nil
 	})
+	sort.Strings(problems)
+	return problems, scanned, err
+}
+
+func TestGoInstallLinesUseTheDeclaredModulePath(t *testing.T) {
+	mods := declaredModules(t)
+	problems, scanned, err := goInstallProblems(goInstallRoot, mods)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if scanned < 50 {
 		t.Fatalf("scanned only %d files: the walk is not reaching the docs", scanned)
 	}
-	sort.Strings(problems)
 	for _, p := range problems {
 		t.Errorf("go install names this organisation with a module path no go.mod declares (declared: %v): %s", mods, p)
+	}
+}
+
+// The walk of the real tree finds nothing wrong today, so a kind of file that the walk stopped reading would go unnoticed. This plants
+// a bad target in one file of each kind and requires every one to be reported, and requires the skipped places to stay skipped.
+func TestGoInstallWalkReadsEveryKindOfFile(t *testing.T) {
+	const bad = "go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest\n"
+	mods := []string{"github.com/alphawavesystems/flutter-probe"}
+	root := t.TempDir()
+	read := []string{"README.md", "docs/page.mdx", "site/page.astro", "ci/workflow.yml", "ci/workflow.yaml", "notes.txt", "scripts/install.sh",
+		"data.json", "Makefile", "lower/makefile", "gnu/GNUmakefile", "build/rules.mk", "Dockerfile", "Dockerfile.dev", "Containerfile", "deep/er/path/Makefile"}
+	skipped := []string{"CHANGELOG.md", ".git/config.md", "node_modules/pkg/README.md", "docs/research/note.md", ".worktrees/x/README.md", "main.go", "image.png"}
+	for _, f := range append(append([]string{}, read...), skipped...) {
+		path := filepath.Join(root, filepath.FromSlash(f))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(bad), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	problems, scanned, err := goInstallProblems(root, mods)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scanned != len(read) {
+		t.Errorf("read %d files, want %d (one of each kind, none of the skipped places)", scanned, len(read))
+	}
+	got := map[string]bool{}
+	for _, p := range problems {
+		got[strings.SplitN(p, ": ", 2)[0]] = true
+	}
+	for _, f := range read {
+		if !got[f] {
+			t.Errorf("a bad target in %s was not reported", f)
+		}
+	}
+	for _, f := range skipped {
+		if got[f] {
+			t.Errorf("%s must be skipped but was reported", f)
+		}
+	}
+}
+
+// A flag's value is not a target: `-tags netgo` must not make `netgo` a target, and the word after it is the target.
+func TestGoInstallTargetsSkipFlagValues(t *testing.T) {
+	for _, tc := range []struct {
+		name, text string
+		want       []string
+	}{
+		{"-tags with a value", "go install -tags netgo example.com/a/cmd/x@latest", []string{"example.com/a/cmd/x@latest"}},
+		{"-C with a directory", "go install -C tools example.com/a/cmd/x@latest", []string{"example.com/a/cmd/x@latest"}},
+		{"-ldflags unquoted value", "go install -ldflags -s example.com/a/cmd/x@latest", []string{"example.com/a/cmd/x@latest"}},
+		{"a flag that takes no value", "go install -v example.com/a/cmd/x@latest", []string{"example.com/a/cmd/x@latest"}},
+		{"a flag with =", "go install -tags=netgo example.com/a/cmd/x@latest", []string{"example.com/a/cmd/x@latest"}},
+		{"two value flags", "go install -tags netgo -C tools example.com/a/cmd/x@latest", []string{"example.com/a/cmd/x@latest"}},
+		{"a variable and a flag value", "go install $(FLAGS) -tags netgo example.com/a/cmd/x@latest", []string{"example.com/a/cmd/x@latest"}},
+	} {
+		got := goInstallTargets(tc.text)
+		if strings.Join(got, "|") != strings.Join(tc.want, "|") {
+			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
+		}
 	}
 }
 

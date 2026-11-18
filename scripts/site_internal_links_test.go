@@ -13,7 +13,8 @@ import (
 // Every internal link in the website's sources must point at a page that exists: a documentation page
 // (src/content/docs/<path>.md, or <path>/index.md), a page of src/pages (<path>.astro, <path>/index.astro), or a file of public/.
 // It reads the sources, not a build, so it needs no Node and runs with the other script tests. Anchors (#section) are not checked,
-// only that the page exists; external links, mailto: and template expressions are skipped.
+// only that the page exists; external links, mailto: and template expressions are skipped. The sidebar of astro.config.mjs is checked
+// too: every `slug: '...'` and `link: '/...'` entry must name a page (the labels are not checked).
 
 const siteRoot = "../website"
 
@@ -65,6 +66,58 @@ func brokenInternalLinks(root, text string) []string {
 		}
 	}
 	return bad
+}
+
+var (
+	sidebarSlug = regexp.MustCompile(`slug:\s*['"]([^'"]+)['"]`)
+	sidebarLink = regexp.MustCompile(`link:\s*['"](/[^'"]*)['"]`)
+)
+
+// missingSidebarEntries returns the entries of an astro config's sidebar that name no page.
+func missingSidebarEntries(root, config string) []string {
+	var bad []string
+	for _, m := range sidebarSlug.FindAllStringSubmatch(config, -1) {
+		if !sitePageExists(root, "/"+strings.Trim(m[1], "/")+"/") {
+			bad = append(bad, "slug "+m[1])
+		}
+	}
+	for _, m := range sidebarLink.FindAllStringSubmatch(config, -1) {
+		if !strings.ContainsAny(m[1], "{}$") && !sitePageExists(root, m[1]) {
+			bad = append(bad, "link "+m[1])
+		}
+	}
+	return bad
+}
+
+func TestSiteSidebarEntriesResolve(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join(siteRoot, "astro.config.mjs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(sidebarSlug.FindAllString(string(b), -1)); n < 20 {
+		t.Fatalf("found only %d sidebar slugs: the pattern does not match the config any more", n)
+	}
+	for _, bad := range missingSidebarEntries(siteRoot, string(b)) {
+		t.Errorf("the sidebar names a page that does not exist: %s", bad)
+	}
+}
+
+func TestMissingSidebarEntriesCases(t *testing.T) {
+	root := t.TempDir()
+	for _, f := range []string{"src/content/docs/tools/ai.md", "src/pages/pricing.astro"} {
+		path := filepath.Join(root, f)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := "{ label: 'AI', slug: 'tools/ai' },\n{ label: 'Gone', slug: 'tools/ai-generation' },\n{ label: 'P', link: '/pricing/' },\n{ label: 'Q', link: '/nothing/' },\n{ label: 'X', link: 'https://example.com' }"
+	got := strings.Join(missingSidebarEntries(root, cfg), "|")
+	if got != "slug tools/ai-generation|link /nothing/" {
+		t.Errorf("got %q", got)
+	}
 }
 
 func TestSiteInternalLinksResolve(t *testing.T) {

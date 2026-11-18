@@ -3,8 +3,6 @@
 Archived reference. For active tracking, see `maestro-competitive-roadmap.md` in this directory —
 this file is the point-in-time research that produced it and won't be kept in sync afterward.
 
-Full interactive version: https://claude.ai/code/artifact/77e4a70f-260b-43ec-ba3f-522c1cf557ae
-
 Compared: FlutterProbe v0.10.4 (at research time; `main` has since moved to v0.11.0) vs. Maestro
 cli-2.8.0 (147 GitHub releases, 2022–2026).
 
