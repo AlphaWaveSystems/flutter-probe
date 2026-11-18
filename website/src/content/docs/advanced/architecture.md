@@ -33,7 +33,7 @@ The CLI is written in Go and handles everything outside the device.
 | `device/` | ADB integration, port forwarding, token extraction, permissions |
 | `ios/` | iOS simulator management via `xcrun simctl` |
 | `config/` | `probe.yaml` parsing and validation |
-| `ai/` | Self-healing selectors via fuzzy matching |
+| `ai/` | Test generation and advisory selector proposals (`--ai-heal`) |
 | `report/` | HTML report generation |
 | `visual/` | Screenshot-based visual regression |
 | `plugin/` | YAML-based custom command system |

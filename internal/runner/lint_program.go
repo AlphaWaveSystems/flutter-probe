@@ -49,6 +49,27 @@ func lintProgram(prog *parser.Program) []LintFinding {
 		}
 	}
 
+	// Check: a recipe whose name starts with a ProbeScript keyword, or with a filler word the parser drops, parses, but a call written
+	// with its name does not reach it, so nothing can call it. The call is what fails (unknown step), so this is a warning on the
+	// declaration. RecipeCallProblem resolves the call the way a run does.
+	for _, r := range prog.Recipes {
+		word, why := RecipeCallProblem(r.Name, len(r.Params))
+		switch why {
+		case RecipeNameKeyword:
+			warns = append(warns, LintFinding{Line: r.Line, Warning: true, Message: fmt.Sprintf(
+				"recipe %q: a call that starts with its name is not read as a call to it, because %q is a ProbeScript keyword; "+
+					"start the name with a word that is not a keyword (for example \"sign in as\")", r.Name, word)})
+		case RecipeNameCase:
+			warns = append(warns, LintFinding{Line: r.Line, Warning: true, Message: fmt.Sprintf(
+				"recipe %q: a call is looked up in lower case, so a name with capital letters is never found; write the name in lower case (%q)",
+				r.Name, strings.ToLower(r.Name))})
+		case RecipeNameSkipped:
+			warns = append(warns, LintFinding{Line: r.Line, Warning: true, Message: fmt.Sprintf(
+				"recipe %q: a call that starts with its name does not reach it, because the parser drops a leading %q from a step and looks the call up without it; "+
+					"start the name with another word (for example \"sign in as\")", r.Name, word)})
+		}
+	}
+
 	// Check: recipes referenced by `use` that don't exist
 	// (static check — file existence not verified here)
 

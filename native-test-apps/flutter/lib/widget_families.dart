@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
@@ -18,6 +19,7 @@ const widgetFamilies = <String>[
   'display',
   'lists',
   'dialogs',
+  'progress',
 ];
 
 /// The screen of [family], or null when there is none.
@@ -29,6 +31,7 @@ Widget? widgetFamilyScreen(String family) => switch (family) {
   'display' => const DisplayFamilyScreen(),
   'lists' => const ListsFamilyScreen(),
   'dialogs' => const DialogsFamilyScreen(),
+  'progress' => const ProgressFamilyScreen(),
   _ => null,
 };
 
@@ -1197,6 +1200,78 @@ class _CoverPageState extends State<_CoverPage> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Progress (docs/compat/NEXT.md, item 6): waiting for a spinner to go away. "Load" shows an indeterminate `CircularProgressIndicator`
+/// (`wf_spinner`) for 3 seconds, then the text "Loaded". "Load forever" shows one (`wf_forever`) that never goes away. A
+/// `LinearProgressIndicator` with a value of 0.4 (`wf_linear`) is always shown. State text: `Status: idle|loading|loaded|loading forever`.
+class ProgressFamilyScreen extends StatefulWidget {
+  const ProgressFamilyScreen({super.key});
+
+  @override
+  State<ProgressFamilyScreen> createState() => _ProgressFamilyScreenState();
+}
+
+class _ProgressFamilyScreenState extends State<ProgressFamilyScreen> {
+  String _status = 'idle';
+  Timer? _timer;
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _load() {
+    setState(() => _status = 'loading');
+    _timer?.cancel();
+    _timer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _status = 'loaded');
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Progress')),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          Row(
+            children: [
+              _s(
+                'wf_load',
+                (k) => ElevatedButton(
+                  key: k,
+                  onPressed: _load,
+                  child: const Text('Load'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _s(
+                'wf_load_forever',
+                (k) => ElevatedButton(
+                  key: k,
+                  onPressed: () => setState(() => _status = 'loading forever'),
+                  child: const Text('Load forever'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_status == 'loading')
+            _s('wf_spinner', (k) => CircularProgressIndicator(key: k)),
+          if (_status == 'loading forever')
+            _s('wf_forever', (k) => CircularProgressIndicator(key: k)),
+          if (_status == 'loaded')
+            _s('wf_loaded', (k) => Text('Loaded', key: k)),
+          const SizedBox(height: 12),
+          _s('wf_linear', (k) => LinearProgressIndicator(key: k, value: 0.4)),
+          _state('wf_progress_state', 'Status: $_status'),
         ],
       ),
     );

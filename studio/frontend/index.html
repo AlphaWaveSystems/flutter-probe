@@ -179,7 +179,7 @@
       </section>
     </main>
 
-    <section id="chat-pane" hidden>
+    <section id="chat-pane" tabindex="-1" hidden>
       <div class="pane-title">
         <span>AI Chat <span id="chat-provider" class="dim" style="font-size:10px;font-weight:normal;unicode-bidi:isolate"></span></span>
         <span id="chat-cost" class="dim chat-cost"></span>
@@ -206,9 +206,9 @@
     <div id="toast-container" aria-live="polite"></div>
 
     <div id="settings-overlay" class="overlay" hidden>
-      <div class="overlay-card">
+      <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <div class="overlay-header">
-          <h2>Workspace settings</h2>
+          <h2 id="settings-title">Workspace settings</h2>
           <button id="btn-settings-close" class="btn-mini" title="Close">✕</button>
         </div>
         <p class="dim">
@@ -322,14 +322,14 @@
     </div>
 
     <div id="ai-preview-overlay" class="overlay" hidden>
-      <div class="overlay-card">
+      <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="ai-preview-title">
         <div class="overlay-header">
-          <h2>Before this message</h2>
+          <h2 id="ai-preview-title">Before this message</h2>
         </div>
         <p class="dim">
           This is what the chat would send to the AI provider now, with credentials redacted. Nothing is sent until you press Send. You see this again when the destination changes.
         </p>
-        <pre id="ai-preview-text" class="ai-preview-text"></pre>
+        <pre id="ai-preview-text" class="ai-preview-text" tabindex="0" role="region" aria-label="What the chat would send"></pre>
         <div class="settings-actions">
           <button type="button" id="btn-ai-preview-cancel" class="btn">Cancel</button>
           <button type="button" id="btn-ai-preview-send" class="btn btn-primary">Send</button>
@@ -343,7 +343,7 @@
           <h2 id="fix-preview-title">Before Suggest a fix</h2>
         </div>
         <p id="fix-preview-note" class="dim"></p>
-        <pre id="fix-preview-text" class="ai-preview-text"></pre>
+        <pre id="fix-preview-text" class="ai-preview-text" tabindex="0" role="region" aria-label="What Suggest a fix would send"></pre>
         <div class="settings-actions">
           <button type="button" id="btn-fix-preview-cancel" class="btn">Cancel</button>
           <button type="button" id="btn-fix-preview-send" class="btn btn-primary">Send</button>
@@ -352,12 +352,12 @@
     </div>
 
     <div id="explain-preview-overlay" class="overlay" hidden>
-      <div class="overlay-card">
+      <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="explain-preview-title">
         <div class="overlay-header">
-          <h2>Before Explain</h2>
+          <h2 id="explain-preview-title">Before Explain</h2>
         </div>
         <p id="explain-preview-note" class="dim"></p>
-        <pre id="explain-preview-text" class="ai-preview-text"></pre>
+        <pre id="explain-preview-text" class="ai-preview-text" tabindex="0" role="region" aria-label="What Explain would send"></pre>
         <div class="settings-actions">
           <button type="button" id="btn-explain-preview-cancel" class="btn">Cancel</button>
           <button type="button" id="btn-explain-preview-send" class="btn btn-primary">Send</button>
@@ -366,7 +366,7 @@
     </div>
 
     <div id="send-allow-overlay" class="overlay" hidden>
-      <div class="overlay-card">
+      <div class="overlay-card" role="alertdialog" aria-modal="true" aria-labelledby="send-allow-title" aria-describedby="send-allow-lines">
         <div class="overlay-header">
           <h2 id="send-allow-title">Send requests?</h2>
         </div>
@@ -380,9 +380,9 @@
     </div>
 
     <div id="wifi-overlay" class="overlay" hidden>
-      <div class="overlay-card">
+      <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="wifi-title">
         <div class="overlay-header">
-          <h2>WiFi devices</h2>
+          <h2 id="wifi-title">WiFi devices</h2>
           <button id="btn-wifi-close" class="btn-mini" title="Close">✕</button>
         </div>
         <p class="dim">
@@ -469,9 +469,9 @@
       </div>
     </div>
     <div id="help-overlay" class="overlay" hidden>
-      <div class="overlay-card">
+      <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="help-title">
         <div class="overlay-header">
-          <h2>Keyboard shortcuts</h2>
+          <h2 id="help-title">Keyboard shortcuts</h2>
           <button id="btn-help-close" class="btn-mini" title="Close">✕</button>
         </div>
         <table class="shortcut-table">
@@ -494,9 +494,9 @@
     </div>
 
     <div id="api-key-overlay" class="overlay" hidden>
-      <div class="overlay-card">
+      <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="api-key-title">
         <div class="overlay-header">
-          <h2>Anthropic API key</h2>
+          <h2 id="api-key-title">Anthropic API key</h2>
           <button id="btn-api-key-close" class="btn-mini" title="Close">✕</button>
         </div>
         <p class="dim">
