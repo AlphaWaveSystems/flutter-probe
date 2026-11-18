@@ -136,7 +136,7 @@ Automated tests are only useful if failures are actionable. FlutterProbe generat
 Reports can be output as JUnit XML for CI integration or as HTML for human review. JUnit XML integrates directly with GitHub Actions, GitLab CI, and most CI dashboards to surface test results in pull request checks.
 
 ```bash
-probe test tests/ --report junit --output results.xml
+probe test tests/ --format junit --output results.xml
 ```
 
 When a test fails in CI, the combination of the failure screenshot, the step-level log, and the device log usually provides enough context to diagnose the issue without reproducing it locally.

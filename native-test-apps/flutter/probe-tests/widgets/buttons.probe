@@ -61,3 +61,12 @@ test "a long press on a button that has no long-press handler ends as a tap"
   see "Elevated: 0"
   long press "Press elevated"
   see "Elevated: 1"
+
+# Below the fold: a space of a screen height plus 600 dp and then one widget. A ListView builds only the children near the viewport, so the widget is not in the tree until a scroll reaches it.
+test "a button below the fold: scroll to it, tap it, scroll back"
+  don't see "Bottom button"
+  scroll down until "Bottom button" appears
+  see "Lower taps: 0"
+  tap "Bottom button"
+  see "Lower taps: 1"
+  scroll up until "Press elevated" appears

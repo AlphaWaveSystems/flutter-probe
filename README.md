@@ -524,7 +524,7 @@ Add to your Flutter app's `pubspec.yaml`:
 ```yaml
 dependencies:
   flutter_probe_annotation: ^0.9.6
-  flutter_probe_agent: ^0.27.0
+  flutter_probe_agent: ^0.26.1
 
 dev_dependencies:
   flutter_probe_gen: ^0.9.6
@@ -580,7 +580,7 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 | `probe test [path]` | Run tests (file, directory, or glob) |
 | `probe test --tag smoke` | Run tests by tag |
 | `probe test --format json -o results.json` | Output JSON results |
-| `probe lint [path]` | Validate `.probe` syntax; warns, never fails, on count and zero-state text checks without an anchored `matching` pattern |
+| `probe lint [path]` | Validate `.probe` syntax; warns, never fails, on count and zero-state text checks without an anchored `matching` pattern and on a recipe declared with a name that a call cannot reach (a keyword start such as `log in as`, a leading filler word, capital letters) |
 | `probe record` | Record interactions → generate ProbeScript |
 | `probe report --input results.json` | Generate HTML report |
 | `probe device list` | List connected devices and simulators |
