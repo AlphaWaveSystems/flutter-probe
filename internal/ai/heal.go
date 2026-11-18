@@ -18,6 +18,8 @@ type AIHealResult struct {
 // HealSelector uses the LLM to suggest a replacement for a broken selector,
 // combining the failed selector text with the live widget tree dump.
 //
+// Nothing in the runner or the CLI calls it: `probe test --ai-heal` uses ProposeSelector. It is kept for its tests.
+//
 // If autoHeal is true the suggestion is returned directly. When false the
 // caller should present the suggestion to the user for confirmation.
 func (g *Generator) HealSelector(ctx context.Context, original string, widgetTree string, autoHeal bool) (*AIHealResult, error) {

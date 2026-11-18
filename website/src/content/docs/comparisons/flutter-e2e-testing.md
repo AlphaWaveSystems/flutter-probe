@@ -86,7 +86,7 @@ test "user can log in"
   see "Welcome"
 ```
 
-**Strengths:** No Dart test code to maintain, human-readable scripts that non-developers can review, direct widget-tree access without a WebDriver layer, built-in [visual regression](/advanced/visual-regression/), [self-healing selectors](/advanced/self-healing/), support for five cloud farms, and parallel execution via `--parallel` and `--shard` flags.
+**Strengths:** No Dart test code to maintain, human-readable scripts that non-developers can review, direct widget-tree access without a WebDriver layer, built-in [visual regression](/advanced/visual-regression/), [advisory selector proposals for failed steps](/advanced/self-healing/), support for five cloud farms, and parallel execution via `--parallel` and `--shard` flags.
 
 **Limitations:** Requires installing a separate CLI and embedding the Dart agent. ProbeScript is purpose-built for E2E flows, so complex programmatic logic may need [hooks](/probescript/hooks/) or [recipes](/probescript/recipes/).
 
@@ -99,7 +99,7 @@ test "user can log in"
 | Cloud farm support | Manual setup | Limited | 5 providers implemented, [not yet verified on a live account](/tools/cloud-farms/) |
 | CI reporting | DIY | DIY | Built-in HTML/JUnit reports |
 | Visual regression | No | No | Yes |
-| Self-healing selectors | No | No | Yes |
+| Advisory selector proposals on failure | No | No | Yes |
 | Migration tooling | N/A | N/A | Imports from 7 formats |
 
 ## When to Use Each
@@ -115,7 +115,7 @@ test "user can log in"
 1. [Install the CLI](/getting-started/installation/) -- a single binary for macOS, Linux, and Windows.
 2. Add the Dart agent to your app (`pubspec.yaml` one-liner).
 3. Write your first `.probe` file following the [Quick Start](/getting-started/quick-start/) guide.
-4. Run it: `probe run tests/smoke/login.probe --device emulator-5554`.
+4. Run it: `probe test tests/smoke/login.probe --device emulator-5554`.
 5. View the HTML report or pipe JUnit XML into your CI pipeline. See [CI/CD with GitHub Actions](/ci-cd/github-actions/) for a working workflow.
 
 The [VS Code extension](/tools/vscode/) adds syntax highlighting, CodeLens run buttons, and a test explorer so you can author and debug tests without leaving your editor.
