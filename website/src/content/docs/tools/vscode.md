@@ -62,6 +62,13 @@ code --install-extension flutterprobe-*.vsix
 
 `<version>` is the `version` in `vscode/package.json`. The build compiles the extension first (`vscode:prepublish`).
 
+Two things to expect from this build:
+
+- **The device view is a placeholder.** The build copies the shared device-view bundle from `studio/frontend/dist-device-view/` when it exists. A fresh checkout does not have it, so the build prints `device-view.iife.js not found; keeping the placeholder in media/` and the package carries the placeholder. Build the bundle first (`npm run build:device-view` in `studio/frontend`, which needs that folder's dependencies) if the package should have the real device view.
+- **`vsce` warns that there is no `LICENSE` file** in `vscode/` and still writes the package.
+
+If `npm run package` stops on a dependency check, `npx vsce package --no-dependencies` writes the same package: the extension has no runtime dependencies, and the two commands gave the same 49 files and the same size here.
+
 ### From source
 
 ```bash

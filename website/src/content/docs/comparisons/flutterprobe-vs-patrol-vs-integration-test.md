@@ -108,7 +108,7 @@ tap "Sign In" button
 see "Welcome back"
 ```
 
-The ProbeScript version is shorter and does not require Dart knowledge. It uses widget labels and types rather than keys, which means tests do not break when developers refactor widget keys. The trade-off is that ProbeScript is less expressive than Dart for complex assertions or custom logic — though [recipes](/advanced/recipes/) and [hooks](/advanced/hooks/) extend its capabilities.
+The ProbeScript version is shorter and does not require Dart knowledge. It uses widget labels and types rather than keys, which means tests do not break when developers refactor widget keys. The trade-off is that ProbeScript is less expressive than Dart for complex assertions or custom logic — though [recipes](/probescript/recipes/) and [hooks](/probescript/hooks/) extend its capabilities.
 
 ## Performance
 
@@ -160,6 +160,6 @@ FlutterProbe has no converter for `integration_test` or Patrol suites: those are
 
 **Choose Patrol if** you need native OS interaction (permissions, notifications, system dialogs) and want to stay in the Dart ecosystem. Patrol is well-maintained and has a growing community.
 
-**Choose FlutterProbe if** you need fast CI execution, non-Dart test syntax for cross-functional teams, cloud device farm support beyond Firebase, or features like visual regression testing, advisory selector proposals, and [test recording](/tools/recorder/). FlutterProbe's out-of-process architecture provides structural advantages for larger test suites and CI-heavy workflows.
+**Choose FlutterProbe if** you need fast CI execution, non-Dart test syntax for cross-functional teams, cloud device farm support beyond Firebase, or features like visual regression testing, advisory selector proposals, and [test recording](/tools/recording/). FlutterProbe's out-of-process architecture provides structural advantages for larger test suites and CI-heavy workflows.
 
 The tools are not mutually exclusive. Some teams use `integration_test` for a small set of smoke tests that live alongside the app code and FlutterProbe for the broader E2E regression suite. Choose based on your team's specific needs, CI infrastructure, and scale.
