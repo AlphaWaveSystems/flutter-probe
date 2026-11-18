@@ -153,6 +153,35 @@ describe("the check (a gate with an allowlist)", () => {
     writeFileSync(allow, JSON.stringify({ ".low": "an example allowed for the test", "--dim on --bg-1": "an example allowed for the test" })); // the rule, and the token on its surface
     assert.equal(run().status, 0);
   });
+  it("fails for a rule that could not be read unless it is allowed by name, with a reason", () => {
+    const skipped = [{ where: ".gradient", reason: "a gradient" }];
+    assert.equal(checkAgainst([], {}, skipped).length, 1);
+    assert.match(checkAgainst([], {}, skipped)[0], /could not be read/);
+    assert.deepEqual(checkAgainst([], { "skipped: .gradient": "a decorative gradient with no text on it" }, skipped), []);
+    assert.equal(checkAgainst([], { "skipped: .gone": "it was a gradient once" }, []).length, 1); // stale
+  });
+  it("exits 1 from the command line for a rule it cannot read, and for a pair between 3:1 and 4.5:1", () => {
+    const dir = mkdtempSync(join(tmpdir(), "contrast-skip-"));
+    const tool = fileURLToPath(new URL("../tools/contrast.mjs", import.meta.url));
+    const allow = join(dir, "allow.json");
+    writeFileSync(allow, "{}");
+    const check = (cssText: string) => {
+      const css = join(dir, "s.css");
+      writeFileSync(css, cssText);
+      return spawnSync(process.execPath, [tool, "--check", "--css", css, "--allowlist", allow], { encoding: "utf8" });
+    };
+    // an unknown variable: skipped, and a skip is not a pass
+    const skip = check(":root { --bg-1: #111111; }\n.rv-skip { color: var(--zzz); background: var(--bg-1); }\n");
+    assert.equal(skip.status, 1);
+    assert.match(skip.stderr, /could not be read/);
+    // a pair at 3.5:1 is below 4.5 and above the 3:1 a gate on the wrong threshold would use
+    assert.ok(ratio("#6a6a6a", "#111111") > 3 && ratio("#6a6a6a", "#111111") < 4.5, `${ratio("#6a6a6a", "#111111")}`);
+    const mid = check(".mid { color: #6a6a6a; background: #111111; }\n");
+    assert.equal(mid.status, 1);
+    assert.match(mid.stderr, /not allowed/);
+    // and a pair that is fine passes
+    assert.equal(check(".ok { color: #eeeeee; background: #111111; }\n").status, 0);
+  });
   it("passes on the real stylesheet with the real allowlist", () => {
     const r = spawnSync(process.execPath, [fileURLToPath(new URL("../tools/contrast.mjs", import.meta.url)), "--check"], { encoding: "utf8" });
     assert.equal(r.status, 0, r.stderr);

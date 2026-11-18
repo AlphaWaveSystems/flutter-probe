@@ -5,7 +5,7 @@
 // count it, so "N pairs, M below" is never an undercount that hides a rule. A background with transparency is judged over each of the five surface tokens (a
 // translucent hover over a dark surface is not the same colour as over a lighter one) and the worst surface is shown. With --max-below N the exit code is 1 when
 // more than N pairs are below 4.5:1; without it the exit code is 0 (a report). With --check it is a gate: every row below 4.5:1 must be in the allowlist
-// (tools/contrast-allowlist.json: { "<where>": "<the reason it is allowed>" }) or the exit code is 1, and an allowlist entry whose row is no longer below 4.5:1 is
+// (tools/contrast-allowlist.json: { "<where>": "<the reason it is allowed>" }) or the exit code is 1, and so is a rule it could not read (allowed as "skipped: <selector>"), and an allowlist entry whose row is no longer below 4.5:1 is
 // an error too, so the list cannot go stale.
 //   ratio = (L1 + 0.05) / (L2 + 0.05), L = 0.2126 R + 0.7152 G + 0.0722 B on the linearised sRGB channels. A text of normal size needs 4.5 (AA), a large text
 //   (18.66 px bold or 24 px) and a UI component or graphic needs 3. It only reads the stylesheet: a colour that script sets, or a background that comes from a
@@ -114,13 +114,15 @@ export function analyse(cssText) {
 }
 
 /** What is wrong with the rows below 4.5:1 given the allowlist: a row that is not allowed, an entry with no reason, and an entry whose row is not below 4.5:1 any more. */
-export function checkAgainst(below, allow) {
+export function checkAgainst(below, allow, skipped = []) {
   const problems = [];
-  const keys = new Set(below.map((x) => x.where));
+  // a rule that could not be read is not a pass: it must be allowed by name, with a reason, as "skipped: <selector>"
+  for (const s of skipped) if (!(`skipped: ${s.where}` in allow)) problems.push(`a rule could not be read and is not allowed: ${s.where} (${s.reason}); read it by writing its colours in a form this reads, or allow it as "skipped: ${s.where}" with a reason`);
+  const keys = new Set([...below.map((x) => x.where), ...skipped.map((s) => `skipped: ${s.where}`)]);
   for (const x of below) if (!(x.where in allow)) problems.push(`below 4.5:1 and not allowed: ${x.where} (${x.r.toFixed(2)}, ${x.fg} on ${x.bg})`);
   for (const [where, reason] of Object.entries(allow)) {
     if (typeof reason !== "string" || reason.trim().length < 10) problems.push(`the allowlist entry "${where}" has no reason`);
-    if (!keys.has(where)) problems.push(`the allowlist entry "${where}" is no longer below 4.5:1: delete it`);
+    if (!keys.has(where)) problems.push(`the allowlist entry "${where}" is no longer below 4.5:1 (or no longer skipped): delete it`);
   }
   return problems;
 }
@@ -161,7 +163,7 @@ function main() {
   if (args.includes("--check")) {
     const allowPath = arg("--allowlist", fileURLToPath(new URL("./contrast-allowlist.json", import.meta.url)));
     const allow = JSON.parse(readFileSync(allowPath, "utf8"));
-    const problems = checkAgainst(below, allow);
+    const problems = checkAgainst(below, allow, a.skipped);
     for (const p of problems) console.error(p);
     if (problems.length > 0) process.exit(1);
     console.log(`contrast check: ${below.length} rows below 4.5:1, all allowed (${Object.keys(allow).length} in the allowlist)`);

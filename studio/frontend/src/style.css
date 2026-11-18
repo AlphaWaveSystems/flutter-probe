@@ -126,7 +126,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-primary {
-  background: var(--brand-strong); border-color: var(--brand-strong); color: white;
+  background: var(--brand-strong); border-color: var(--brand); color: white;
 }
 .btn-primary:hover:not(:disabled) { background: var(--brand); border-color: var(--brand); }
 .btn-icon-only { padding: 5px 8px; }
@@ -711,7 +711,7 @@ kbd {
   text-align: center;
 }
 
-.btn-active { background: var(--brand-strong); border-color: var(--brand-strong); color: white; }
+.btn-active { background: var(--brand-strong); border-color: var(--brand); color: white; }
 
 /* Device settings panel (device pane header "Settings"). */
 .device-settings { padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg-2); font-size: 12px; max-height: 45%; overflow: auto; flex-shrink: 0; }
