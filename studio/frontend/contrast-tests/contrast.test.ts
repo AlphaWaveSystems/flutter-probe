@@ -2,8 +2,11 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 // @ts-ignore: a plain .mjs tool with no declaration file
-import { analyse, parse, ratio } from "../tools/contrast.mjs";
+import { analyse, checkAgainst, parse, ratio } from "../tools/contrast.mjs";
 
 const near = (a: number, b: number) => assert.ok(Math.abs(a - b) < 0.01, `${a} is not ${b}`);
 
@@ -105,12 +108,53 @@ describe("the command line", () => {
     assert.match(r.stdout, /rows read .*; \d+ below 4\.5:1/);
   });
   it("exits 1 with --max-below when more rows are below 4.5:1 than allowed, and 0 when the limit is met", () => {
-    const m = /(\d+) below 4\.5:1/.exec(run().stdout);
+    const dir = mkdtempSync(join(tmpdir(), "contrast-max-"));
+    const css = join(dir, "s.css");
+    writeFileSync(css, ":root { --bg-1: #111111; --dim: #333333; }\n.low { color: var(--dim); background: var(--bg-1); }\n.low2 { color: #444444; background: #111111; }\n");
+    const out = run("--css", css).stdout;
+    const m = /(\d+) below 4\.5:1/.exec(out);
     assert.ok(m, "no total line");
     const n = Number(m[1]);
-    assert.ok(n > 0);
-    assert.equal(run("--max-below", String(n - 1)).status, 1);
-    assert.match(run("--max-below", String(n - 1)).stderr, /more than the/);
-    assert.equal(run("--max-below", String(n)).status, 0);
+    assert.equal(n, 3); // the token row and the two rules
+    assert.equal(run("--css", css, "--max-below", String(n - 1)).status, 1);
+    assert.match(run("--css", css, "--max-below", String(n - 1)).stderr, /more than the/);
+    assert.equal(run("--css", css, "--max-below", String(n)).status, 0);
+  });
+});
+
+describe("the check (a gate with an allowlist)", () => {
+  const row = (where: string, r: number) => ({ where, r, fg: "#777777", bg: "#333333" });
+  it("passes when every row below 4.5:1 is allowed with a reason", () => {
+    assert.deepEqual(checkAgainst([row(".a", 3)], { ".a": "decorative, a disabled control (WCAG exempts it)" }), []);
+    assert.deepEqual(checkAgainst([], {}), []);
+  });
+  it("fails for a row that is below 4.5:1 and not allowed", () => {
+    const p = checkAgainst([row(".a", 3), row(".b", 4)], { ".a": "decorative, a disabled control" });
+    assert.equal(p.length, 1);
+    assert.match(p[0], /\.b/);
+  });
+  it("fails for an entry with no reason, and for an entry whose row is not below 4.5:1 any more", () => {
+    assert.equal(checkAgainst([row(".a", 3)], { ".a": "" }).length, 1);
+    assert.equal(checkAgainst([row(".a", 3)], { ".a": "short" }).length, 1);
+    const stale = checkAgainst([], { ".gone": "it was decorative once" });
+    assert.equal(stale.length, 1);
+    assert.match(stale[0], /no longer below/);
+  });
+  it("exits 1 from the command line for a stylesheet with a failing pair, and 0 when the pair is allowed", () => {
+    const dir = mkdtempSync(join(tmpdir(), "contrast-"));
+    const css = join(dir, "s.css");
+    const allow = join(dir, "allow.json");
+    writeFileSync(css, ":root { --bg-1: #111111; --dim: #333333; }\n.low { color: var(--dim); background: var(--bg-1); }\n");
+    writeFileSync(allow, "{}");
+    const tool = fileURLToPath(new URL("../tools/contrast.mjs", import.meta.url));
+    const run = () => spawnSync(process.execPath, [tool, "--check", "--css", css, "--allowlist", allow], { encoding: "utf8" });
+    assert.equal(run().status, 1);
+    assert.match(run().stderr, /not allowed/);
+    writeFileSync(allow, JSON.stringify({ ".low": "an example allowed for the test", "--dim on --bg-1": "an example allowed for the test" })); // the rule, and the token on its surface
+    assert.equal(run().status, 0);
+  });
+  it("passes on the real stylesheet with the real allowlist", () => {
+    const r = spawnSync(process.execPath, [fileURLToPath(new URL("../tools/contrast.mjs", import.meta.url)), "--check"], { encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr);
   });
 });

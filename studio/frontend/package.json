@@ -30,6 +30,7 @@
     "test:typing-target": "node --test typing-target-tests/",
     "test:modal-focus": "node --test modal-focus-tests/",
     "test:contrast": "node --test contrast-tests/",
+    "check:contrast": "node tools/contrast.mjs --check",
     "test:result-notes": "node --test result-notes-tests/",
     "test:still-waiting": "node --test still-waiting-tests/",
     "test:recording": "node --test recording-tests/"

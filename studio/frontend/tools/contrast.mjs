@@ -1,10 +1,12 @@
 // WCAG 2.x contrast ratios of the colour pairs in src/style.css, with no dependency.
-//   node tools/contrast.mjs [--fail-only] [--suggest] [--max-below N]
+//   node tools/contrast.mjs [--fail-only] [--suggest] [--max-below N] [--check [--allowlist FILE]] [--css FILE]
 // It prints (1) every text token on every surface token, and (2) every rule that sets a `color` and a `background` together, with the ratio of each pair, and
 // then says what it could NOT read: a rule whose colour is a gradient, a keyword or a variable it cannot resolve is listed as skipped with the reason, and the totals
 // count it, so "N pairs, M below" is never an undercount that hides a rule. A background with transparency is judged over each of the five surface tokens (a
 // translucent hover over a dark surface is not the same colour as over a lighter one) and the worst surface is shown. With --max-below N the exit code is 1 when
-// more than N pairs are below 4.5:1 (a gate for later); without it the exit code is 0 (a report).
+// more than N pairs are below 4.5:1; without it the exit code is 0 (a report). With --check it is a gate: every row below 4.5:1 must be in the allowlist
+// (tools/contrast-allowlist.json: { "<where>": "<the reason it is allowed>" }) or the exit code is 1, and an allowlist entry whose row is no longer below 4.5:1 is
+// an error too, so the list cannot go stale.
 //   ratio = (L1 + 0.05) / (L2 + 0.05), L = 0.2126 R + 0.7152 G + 0.0722 B on the linearised sRGB channels. A text of normal size needs 4.5 (AA), a large text
 //   (18.66 px bold or 24 px) and a UI component or graphic needs 3. It only reads the stylesheet: a colour that script sets, or a background that comes from a
 //   parent rule, is not seen, so axe on the rendered page remains the check; this is for choosing a palette.
@@ -111,6 +113,18 @@ export function analyse(cssText) {
   return { tokens, textTokens: [...textTokens], surfaces, rows, skipped };
 }
 
+/** What is wrong with the rows below 4.5:1 given the allowlist: a row that is not allowed, an entry with no reason, and an entry whose row is not below 4.5:1 any more. */
+export function checkAgainst(below, allow) {
+  const problems = [];
+  const keys = new Set(below.map((x) => x.where));
+  for (const x of below) if (!(x.where in allow)) problems.push(`below 4.5:1 and not allowed: ${x.where} (${x.r.toFixed(2)}, ${x.fg} on ${x.bg})`);
+  for (const [where, reason] of Object.entries(allow)) {
+    if (typeof reason !== "string" || reason.trim().length < 10) problems.push(`the allowlist entry "${where}" has no reason`);
+    if (!keys.has(where)) problems.push(`the allowlist entry "${where}" is no longer below 4.5:1: delete it`);
+  }
+  return problems;
+}
+
 function suggest(a) {
   const mix = (c, t) => {
     const p = parse(c);
@@ -135,13 +149,23 @@ function main() {
   const failOnly = args.includes("--fail-only");
   const maxIdx = args.indexOf("--max-below");
   const maxBelow = maxIdx >= 0 ? Number(args[maxIdx + 1]) : null;
-  const a = analyse(readFileSync(fileURLToPath(new URL("../src/style.css", import.meta.url)), "utf8"));
+  const arg = (name, fallback) => (args.includes(name) ? args[args.indexOf(name) + 1] : fallback);
+  const cssPath = arg("--css", fileURLToPath(new URL("../src/style.css", import.meta.url)));
+  const a = analyse(readFileSync(cssPath, "utf8"));
   const read = a.rows.filter((x) => x.r !== null);
   for (const x of read.filter((x) => !failOnly || x.r < 4.5)) console.log(`${x.r.toFixed(2).padStart(6)}  ${x.r < 3 ? "FAIL(<3)  " : x.r < 4.5 ? "below 4.5 " : "ok        "} [${x.kind}] ${x.where}  ${x.fg} on ${x.bg}`);
   const below = read.filter((x) => x.r < 4.5);
   console.log(`\n${read.length} rows read (${read.filter((x) => x.kind === "token").length} token-on-surface rows and ${read.filter((x) => x.kind === "rule").length} rule rows; one colour pair can be in both); ${below.length} below 4.5:1 (${read.filter((x) => x.r < 3).length} below 3:1); ${a.skipped.length} rules skipped because a colour could not be read`);
   for (const s of a.skipped) console.log(`  skipped: ${s.where}: ${s.reason}`);
   if (args.includes("--suggest")) suggest(a);
+  if (args.includes("--check")) {
+    const allowPath = arg("--allowlist", fileURLToPath(new URL("./contrast-allowlist.json", import.meta.url)));
+    const allow = JSON.parse(readFileSync(allowPath, "utf8"));
+    const problems = checkAgainst(below, allow);
+    for (const p of problems) console.error(p);
+    if (problems.length > 0) process.exit(1);
+    console.log(`contrast check: ${below.length} rows below 4.5:1, all allowed (${Object.keys(allow).length} in the allowlist)`);
+  }
   if (maxBelow !== null && below.length > maxBelow) {
     console.error(`${below.length} rows below 4.5:1, more than the ${maxBelow} allowed`);
     process.exit(1);
