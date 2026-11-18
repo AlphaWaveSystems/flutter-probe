@@ -116,7 +116,7 @@ test "User can reset password"
   see "Check your email"
 ```
 
-Tests are independent. FlutterProbe resets the app state between tests using configurable [hooks](/advanced/hooks/), so the order does not matter.
+Tests are independent. FlutterProbe resets the app state between tests using configurable [hooks](/probescript/hooks/), so the order does not matter.
 
 ## CI/CD Integration
 

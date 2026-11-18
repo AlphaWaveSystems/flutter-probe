@@ -1,9 +1,14 @@
-# FlutterProbe CI Docker Image
-# ghcr.io/flutterprobe/ci:latest
+# FlutterProbe CI Dockerfile (nothing built from it is published anywhere)
 #
-# Includes: Flutter SDK, Android SDK + emulator, probe CLI
-# Usage:
-#   docker run --rm -v $(pwd):/app ghcr.io/flutterprobe/ci:latest probe test
+# Includes: Flutter SDK, Android SDK + emulator, and the probe CLI built from this repository.
+#
+# Build it yourself. The build context is the REPOSITORY ROOT, because the Dockerfile copies the source of the repository:
+#   docker build -f docker/Dockerfile -t probe-ci .
+# Run it on a Flutter project:
+#   docker run --rm -v $(pwd):/app probe-ci probe test
+#
+# Not verified: this file has not been built by whoever last edited this header (no Docker on that machine). It installs Go 1.23.0 below while
+# go.mod requires a newer Go, and it declares a PROBE_VERSION argument that nothing uses.
 
 FROM ubuntu:22.04
 

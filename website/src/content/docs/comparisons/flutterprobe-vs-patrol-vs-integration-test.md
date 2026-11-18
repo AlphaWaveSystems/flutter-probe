@@ -108,7 +108,7 @@ tap "Sign In" button
 see "Welcome back"
 ```
 
-The ProbeScript version is shorter and does not require Dart knowledge. It uses widget labels and types rather than keys, which means tests do not break when developers refactor widget keys. The trade-off is that ProbeScript is less expressive than Dart for complex assertions or custom logic — though [recipes](/advanced/recipes/) and [hooks](/advanced/hooks/) extend its capabilities.
+The ProbeScript version is shorter and does not require Dart knowledge. It uses widget labels and types rather than keys, which means tests do not break when developers refactor widget keys. The trade-off is that ProbeScript is less expressive than Dart for complex assertions or custom logic — though [recipes](/probescript/recipes/) and [hooks](/probescript/hooks/) extend its capabilities.
 
 ## Performance
 
@@ -152,13 +152,7 @@ If your testing requirements include running on physical devices across multiple
 
 ## Migration
 
-If you have an existing `integration_test` or Patrol suite, FlutterProbe includes a migration tool that converts Dart test files to ProbeScript:
-
-```bash
-flutterprobe migrate --from integration_test --input test/integration/ --output tests/
-```
-
-The migration tool handles the seven most common test framework patterns. Complex custom logic in test files may require manual adjustment. See the [migration guide](/getting-started/migration/) for details.
+FlutterProbe has no converter for `integration_test` or Patrol suites: those are Dart, and [probe-convert](/tools/probe-convert/) reads Maestro, Gherkin, Robot Framework, Detox and Appium tests. An existing `integration_test` or Patrol suite is rewritten by hand as `.probe` files and run with `probe test`.
 
 ## When to Use Each Tool
 
@@ -166,6 +160,6 @@ The migration tool handles the seven most common test framework patterns. Comple
 
 **Choose Patrol if** you need native OS interaction (permissions, notifications, system dialogs) and want to stay in the Dart ecosystem. Patrol is well-maintained and has a growing community.
 
-**Choose FlutterProbe if** you need fast CI execution, non-Dart test syntax for cross-functional teams, cloud device farm support beyond Firebase, or features like visual regression testing, advisory selector proposals, and [test recording](/tools/recorder/). FlutterProbe's out-of-process architecture provides structural advantages for larger test suites and CI-heavy workflows.
+**Choose FlutterProbe if** you need fast CI execution, non-Dart test syntax for cross-functional teams, cloud device farm support beyond Firebase, or features like visual regression testing, advisory selector proposals, and [test recording](/tools/recording/). FlutterProbe's out-of-process architecture provides structural advantages for larger test suites and CI-heavy workflows.
 
 The tools are not mutually exclusive. Some teams use `integration_test` for a small set of smoke tests that live alongside the app code and FlutterProbe for the broader E2E regression suite. Choose based on your team's specific needs, CI infrastructure, and scale.

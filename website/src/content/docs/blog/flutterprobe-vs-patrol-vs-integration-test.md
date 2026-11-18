@@ -106,7 +106,7 @@ Flakiness is highly dependent on test implementation quality. These numbers refl
 
 No tool is perfect. Here is where FlutterProbe has real limitations:
 
-**ProbeScript is not Dart.** For teams that want their E2E tests in the same language as their app, ProbeScript is an additional syntax to learn. Complex assertion logic that would be straightforward in Dart requires using [hooks](/advanced/hooks/) or [recipes](/advanced/recipes/), which adds indirection.
+**ProbeScript is not Dart.** For teams that want their E2E tests in the same language as their app, ProbeScript is an additional syntax to learn. Complex assertion logic that would be straightforward in Dart requires using [hooks](/probescript/hooks/) or [recipes](/probescript/recipes/), which adds indirection.
 
 **Agent dependency.** The Dart agent must be initialized in the app. This is a code change to your `main()` function, guarded behind an `assert` block for debug-only inclusion. It is minimal, but it is a modification to the app under test.
 
@@ -131,4 +131,4 @@ No tool is perfect. Here is where FlutterProbe has real limitations:
 
 These recommendations are not absolute. Evaluate based on your specific project size, team composition, CI infrastructure, and device coverage requirements. You can also combine tools — use `integration_test` for a small smoke suite and FlutterProbe for comprehensive regression testing.
 
-For migration between tools, see the [migration guide](/getting-started/migration/). For a broader look at the testing landscape, see the [Flutter UI testing overview](/comparisons/flutter-ui-testing/).
+For migration from other tools, see [probe-convert](/tools/probe-convert/), which reads Maestro, Gherkin, Robot Framework, Detox and Appium tests (not `integration_test` or Patrol). For a broader look at the testing landscape, see the [Flutter UI testing overview](/comparisons/flutter-ui-testing/).

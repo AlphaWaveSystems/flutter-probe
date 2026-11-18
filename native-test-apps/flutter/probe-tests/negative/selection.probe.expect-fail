@@ -1,0 +1,23 @@
+# The negative variants of probe-tests/widgets/selection.probe: every test below asserts something WRONG, or crosses what the agent can do, and every one must FAIL.
+# They show that the positive suite can fail, and why. This file does not end in .probe, so `probe test` never picks it up in a directory run. To run it:
+#
+#   cp probe-tests/negative/selection.probe.expect-fail /tmp/selection-negative.probe
+#   probe test /tmp/selection-negative.probe --device <serial> -y       # (the selection build, the same probe.yaml as for selection.probe)
+#
+# Expected: 0 passed, 2 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+# Each test must fail at its own step, with the message in its comment. A failure at the `wait until` of `before each test` (a timeout
+# waiting for the screen's last element) is NOT the expected failure: the screen never showed, and the run proves nothing.
+
+before each test
+  restart the app
+  # Right after a restart the agent can answer while the screen is still being built (issue #793): wait for the screen's last element
+  # with an id that is on screen (not the one below the fold).
+  wait until #wf_cupertino_switch_state appears
+
+# Expected: see "Lower terms: off": Expected to see "text("Lower terms: off")" but it was not found (the checkbox is below the fold of a lazy list and not built before a scroll)
+test "N1 the state of a checkbox below the fold is not seen before a scroll"
+  see "Lower terms: off"
+
+# Expected: toggle "Bottom terms": Widget not found: text("Bottom terms") (the checkbox is below the fold of a lazy list and not built before a scroll)
+test "N2 a checkbox below the fold is not toggled without a scroll step"
+  toggle "Bottom terms"

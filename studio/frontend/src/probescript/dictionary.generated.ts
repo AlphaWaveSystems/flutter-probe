@@ -2,7 +2,7 @@
 // Do not edit by hand. After a change under website/src/content/docs/probescript/, run
 // `npm run gen:probescript` in studio/frontend.
 
-export const SOURCE_SHA256 = "64b70168177374c44a885497cbe9a00ba168b21884c4da8760a074e53c3bccba";
+export const SOURCE_SHA256 = "13e2ac7d2baaa7a3757d1bb209fee3f051fc943e6974c66dfb753a39f8076adf";
 
 export const COMMANDS = [
   {
