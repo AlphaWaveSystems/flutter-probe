@@ -131,7 +131,7 @@ Hooks can call recipes just like regular test steps:
 use "recipes/auth.probe"
 
 before each
-  log in as "test@example.com" with "password"
+  sign in as "test@example.com" with "password"
 
 test "user can update name"
   tap "Profile"

@@ -56,7 +56,7 @@ The CLI is free to use (BSL 1.1) and the Dart agent is MIT. Probe Cloud, a hoste
 - [Migrating from Other Frameworks](#migrating-from-other-frameworks)
 - [VS Code Extension](#vs-code-extension)
 - [Configuration (`probe.yaml`)](#configuration-probeyaml)
-- [Self-Healing Selectors](#self-healing-selectors)
+- [When a Selector Breaks](#when-a-selector-breaks)
 - [Repository Structure](#repository-structure)
 - [Documentation](#documentation)
 - [License](#license)
@@ -580,7 +580,7 @@ Full reference: [flutterprobe.dev/probescript/annotations](https://flutterprobe.
 | `probe test [path]` | Run tests (file, directory, or glob) |
 | `probe test --tag smoke` | Run tests by tag |
 | `probe test --format json -o results.json` | Output JSON results |
-| `probe lint [path]` | Validate `.probe` syntax; warns, never fails, on count and zero-state text checks without an anchored `matching` pattern |
+| `probe lint [path]` | Validate `.probe` syntax; warns, never fails, on count and zero-state text checks without an anchored `matching` pattern and on a recipe declared with a name that a call cannot reach (a keyword start such as `log in as`, a leading filler word, capital letters) |
 | `probe record` | Record interactions → generate ProbeScript |
 | `probe report --input results.json` | Generate HTML report |
 | `probe device list` | List connected devices and simulators |
@@ -951,18 +951,13 @@ tools:
   flutter: /path/to/flutter  # optional override: an absolute path outside this repository
 
 ai:
-  api_key: sk-ant-...        # for probe generate and self-healing
+  api_key: sk-ant-...        # for probe generate and selector proposals
   model: claude-sonnet-4-6
 ```
 
-## Self-Healing Selectors
+## When a Selector Breaks
 
-When a selector fails, FlutterProbe automatically tries to find a replacement using:
-
-1. **Fuzzy text match** — Levenshtein similarity against visible text
-2. **Partial key match** — Substring match on ValueKey
-3. **Semantic match** — Accessibility label similarity
-4. **LLM-assisted** — Claude API suggestion with confidence score (requires `ai.api_key`)
+FlutterProbe does not repair a selector while a test runs: a step that finds no match times out and fails, and the error lists the texts and widget keys that were on screen. With an `ai:` block in `probe.yaml`, `probe test --ai-heal` adds an advisory proposed replacement to the JSON report for a selector step that hit the step time limit (at most 3 requests per run; never applied, never verified, no effect on results or the exit code), and Studio offers suggested fixes as buttons. See [When a Selector Breaks](https://flutterprobe.dev/advanced/self-healing/).
 
 ## Repository Structure
 
@@ -976,7 +971,7 @@ internal/
   device/               ADB integration (Android)
   ios/                  xcrun simctl integration (iOS)
   cloud/                Device farm provider integrations
-  ai/                   Self-healing + AI test generation
+  ai/                   AI test generation + selector proposals
   visual/               Screenshot visual regression
   plugin/               YAML-defined custom commands
   report/               HTML report generation
