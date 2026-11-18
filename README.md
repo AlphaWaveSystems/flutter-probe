@@ -957,7 +957,7 @@ ai:
 
 ## When a Selector Breaks
 
-FlutterProbe does not repair a selector while a test runs: a step that finds no match times out and fails, and the error lists the texts and widget keys that were on screen. With an `ai:` block in `probe.yaml`, `probe test --ai-heal` adds an advisory proposed replacement for each failed selector step to the JSON report (never applied, never verified, no effect on results or the exit code), and Studio offers suggested fixes as buttons. See [When a Selector Breaks](https://flutterprobe.dev/advanced/self-healing/).
+FlutterProbe does not repair a selector while a test runs: a step that finds no match times out and fails, and the error lists the texts and widget keys that were on screen. With an `ai:` block in `probe.yaml`, `probe test --ai-heal` adds an advisory proposed replacement to the JSON report for a selector step that hit the step time limit (at most 3 requests per run; never applied, never verified, no effect on results or the exit code), and Studio offers suggested fixes as buttons. See [When a Selector Breaks](https://flutterprobe.dev/advanced/self-healing/).
 
 ## Repository Structure
 
