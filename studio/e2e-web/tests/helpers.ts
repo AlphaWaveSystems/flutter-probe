@@ -38,3 +38,30 @@ export async function disconnect(page: Page) {
   await app(page, "CancelRun").catch(() => undefined);
   await app(page, "Disconnect").catch(() => undefined);
 }
+
+/** Counts the Go calls the page makes, by method name (the body of the bridge's request names it). Read it with expectNoCall for "this was not called". */
+export function recordCalls(page: Page): Record<string, number> {
+  const seen: Record<string, number> = {};
+  page.on("request", (r) => {
+    const m = /"method":"(\w+)"/.exec(r.postData() ?? "");
+    if (m) seen[m[1]] = (seen[m[1]] ?? 0) + 1;
+  });
+  return seen;
+}
+
+const provenRecorders = new WeakSet<object>();
+
+/**
+ * Asserts that none of the named Go methods was called, after proving that the recorder sees a call in this very test: it makes one harmless call
+ * itself (InitialWorkspace, a read of an environment variable) and waits until the recorder has counted it. A recorder that was never attached, or
+ * stopped counting, fails here instead of letting every "nothing happened" assertion pass by default.
+ */
+export async function expectNoCall(page: Page, calls: Record<string, number>, ...methods: string[]) {
+  if (!provenRecorders.has(calls)) {
+    const before = calls.InitialWorkspace ?? 0;
+    await page.evaluate(() => (window as any).go.main.App.InitialWorkspace());
+    await expect.poll(() => calls.InitialWorkspace ?? 0, { message: "the recorder did not count a call it was shown" }).toBeGreaterThan(before);
+    provenRecorders.add(calls);
+  }
+  for (const m of methods) expect(calls[m] ?? 0, `${m} was called`).toBe(0);
+}

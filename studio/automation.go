@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -162,8 +163,10 @@ func (s *automationServer) authorize(r *http.Request) (int, string) {
 	if f := r.Header.Get("Sec-Fetch-Site"); f == "cross-site" || f == "same-site" {
 		return http.StatusForbidden, "browser requests are not allowed"
 	}
-	got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) != 1 {
+	// The scheme is part of the header: a bare token, with no "Bearer ", is not the credential the endpoint documents and is refused.
+	header := r.Header.Get("Authorization")
+	got, hasScheme := strings.CutPrefix(header, "Bearer ")
+	if !hasScheme || got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) != 1 {
 		return http.StatusUnauthorized, "missing or wrong token"
 	}
 	return 0, ""
@@ -178,8 +181,13 @@ func (s *automationServer) handleRPC(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "POST only"})
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 	if err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) { // a body over the limit is refused as such, not cut and judged as whatever JSON is left
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "the request body is over 1 MiB"})
+			return
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
@@ -282,7 +290,38 @@ func probeFileForWriteWithinRoots(roots []string, p string) (string, error) {
 	if info, err := os.Lstat(real); err == nil && info.IsDir() {
 		return "", fmt.Errorf("%s is a folder", p)
 	}
+	if hidden := hiddenBelowRoot(roots, real); hidden != "" {
+		return "", fmt.Errorf("%s: %q starts with a dot (a hidden folder or name such as .git): Studio does not write there", p, hidden)
+	}
 	return real, nil
+}
+
+// hiddenBelowRoot returns the first component of real, below the folder the person opened, that starts with a dot ("" when none does): the file's
+// own name, or any folder on the way to it (.git, .github, .hg, a hidden folder of any tool). Only the part below the root is judged: a workspace
+// that itself sits under a dotted folder is still a workspace. real is the path with links resolved, so a visible link that leads into a hidden
+// folder is judged by where it leads.
+func hiddenBelowRoot(roots []string, real string) string {
+	for _, root := range roots {
+		abs, err := filepath.Abs(root)
+		if err != nil {
+			continue
+		}
+		rr, err := filepath.EvalSymlinks(abs)
+		if err != nil {
+			continue
+		}
+		rel, err := filepath.Rel(rr, real)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		for _, part := range strings.Split(rel, string(filepath.Separator)) {
+			if strings.HasPrefix(part, ".") {
+				return part
+			}
+		}
+		return ""
+	}
+	return ""
 }
 
 // probeFileWithinRoots is withinRoots for a .probe file; the suffix is checked on the

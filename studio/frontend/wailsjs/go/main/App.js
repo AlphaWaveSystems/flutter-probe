@@ -42,6 +42,10 @@ export function CheckInsertBefore(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['CheckInsertBefore'](arg1, arg2, arg3, arg4);
 }
 
+export function CheckReplaceStep(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['CheckReplaceStep'](arg1, arg2, arg3, arg4);
+}
+
 export function CheckReplaceLine(arg1, arg2, arg3) {
   return window['go']['main']['App']['CheckReplaceLine'](arg1, arg2, arg3);
 }

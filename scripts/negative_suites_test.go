@@ -37,6 +37,75 @@ func TestNegativeSuitesAreNeverPickedUpByADirectoryRun(t *testing.T) {
 		if tests == 0 {
 			t.Errorf("%s has no test", f)
 		}
+		if p := restartBlockProblem(f, string(b)); p != "" {
+			t.Error(p)
+		}
+	}
+}
+
+// The suites of a Flutter fixture family (widgets/*.probe) and their negative variants restart the app before each test, so that no test depends on what the
+// one before it left on screen. A file that has lost the block (a header cut in the middle of a comment did it once: the negative tests ran without a restart, 105 ms
+// each) proves less than it says.
+func TestFamilySuitesRestartTheAppBeforeEachTest(t *testing.T) {
+	files, err := filepath.Glob("../native-test-apps/*/probe-tests/widgets/*.probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) == 0 {
+		t.Skip("no family suites")
+	}
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p := restartBlockProblem(f, string(b)); p != "" {
+			t.Error(p)
+		}
+	}
+}
+
+// restartBlockProblem returns what is wrong when content has no `before each test` block of its own (a line that is exactly that) whose first step is
+// `restart the app`, or "" when it has one. A comment that only mentions the words does not count.
+func restartBlockProblem(name, content string) string {
+	lines := strings.Split(content, "\n")
+	for n, line := range lines {
+		if line != "before each test" {
+			continue
+		}
+		for _, next := range lines[n+1:] {
+			t := strings.TrimSpace(next)
+			if t == "" || strings.HasPrefix(t, "#") {
+				continue
+			}
+			if t == "restart the app" {
+				return ""
+			}
+			return fmt.Sprintf("%s: the first step of `before each test` is %q, not `restart the app`", name, t)
+		}
+	}
+	return fmt.Sprintf("%s: no `before each test` block (a line that is exactly that) with `restart the app` as its first step: the tests would run without a restart", name)
+}
+
+func TestRestartBlockProblem(t *testing.T) {
+	cases := []struct {
+		name, content string
+		bad           bool
+	}{
+		{"the block", "before each test\n  restart the app\n\ntest \"a\"\n", false},
+		{"comments and blanks before the step", "before each test\n\n  # why\n  restart the app\n  wait until \"x\" appears\n", false},
+		{"no block", "test \"a\"\n  see \"x\"\n", true},
+		{"the words only in a comment (the slip)", "# A failure at the `wait until` of `before each test\n  restart the app\n  wait until \"x\" appears\n", true},
+		{"another first step", "before each test\n  wait until \"x\" appears\n  restart the app\n", true},
+		{"block with no step", "before each test\n", true},
+		{"indented block line", "  before each test\n  restart the app\n", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := restartBlockProblem("f", c.content) != ""; got != c.bad {
+				t.Errorf("problem = %v, want %v", got, c.bad)
+			}
+		})
 	}
 }
 

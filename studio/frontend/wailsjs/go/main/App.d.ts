@@ -22,6 +22,8 @@ export function Chat(arg1:Array<main.ChatMessage>,arg2:string):Promise<main.Chat
 
 export function CheckInsertBefore(arg1:string,arg2:number,arg3:string,arg4:string):Promise<main.InsertBeforeCheck>;
 
+export function CheckReplaceStep(arg1:string,arg2:number,arg3:string,arg4:string):Promise<main.ReplaceStepCheck>;
+
 export function CheckReplaceLine(arg1:string,arg2:string,arg3:string):Promise<main.ReplaceLineCheck>;
 
 export function CheckTarget(arg1:string):Promise<main.TargetInfo>;

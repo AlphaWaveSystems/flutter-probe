@@ -72,7 +72,7 @@ test.describe("Save as", () => {
       await page.keyboard.press("Enter");
       await expect(overlay(page)).toBeHidden();
       const file = path.join(studio.ws, "my flow.probe");
-      expect(fs.readFileSync(file, "utf8")).toContain('test "new"');
+      await expect.poll(() => (fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "")).toContain('test "new"'); // the file is read until it is there: the write is flushed before it takes its name
       await expect(page.locator("#editor-filename")).toContainText("my flow.probe");
       await expect(page.locator("#editor-dirty")).toBeEmpty();
       await expect(page.locator("#btn-save")).toBeDisabled(); // saved: no unsaved changes
@@ -204,6 +204,24 @@ test.describe("Save as", () => {
       await expect(page.locator("#editor-dirty")).toBeEmpty();
       expect(creates).toBe(1);
       expect(fs.readdirSync(studio.ws)).toEqual(["once.probe"]);
+    } finally {
+      studio.stop();
+    }
+  });
+
+  test("sa-07 after a successful Save as the focus is in the editor (Save is disabled again, so it cannot go back to it)", async ({ page }) => {
+    const studio = await startStudio({ "keep.probe": 'test "keep"\n  open the app\n' });
+    try {
+      await page.context().setExtraHTTPHeaders({ "X-Headless-Token": studio.token });
+      await page.goto(studio.url);
+      await typeScratch(page, 'test "new"');
+      await page.click("#btn-save");
+      await expect(overlay(page)).toBeVisible();
+      await nameField(page).fill("focus check");
+      await page.keyboard.press("Enter");
+      await expect(overlay(page)).toBeHidden();
+      await expect(page.locator("#editor-filename")).toContainText("focus check.probe");
+      await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest("#editor"))).toBe(true);
     } finally {
       studio.stop();
     }

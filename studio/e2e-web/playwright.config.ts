@@ -3,7 +3,7 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { seedExchanges, seedRunWithSteps } from "./tests/explain-seed";
+import { seedExchanges, seedLoginFile, seedLoginText, seedRunWithSteps } from "./tests/explain-seed";
 
 // Studio runs in headless mode (PROBE_STUDIO_HEADLESS=1): the real frontend and Go bindings over HTTP,
 // no native window. scripts/studio-e2e-web.sh builds Studio, prepares a workspace copy (and, for the
@@ -22,6 +22,9 @@ const seedPath = process.env.STUDIO_WORKSPACE ? path.join(process.env.STUDIO_WOR
 if (seedPath) {
   fs.mkdirSync(path.dirname(seedPath), { recursive: true });
   fs.writeFileSync(seedPath, JSON.stringify(seedRunWithSteps()));
+  // the file of the seeded failed step, as the run read it (Studio keeps its text at start-up)
+  fs.mkdirSync(path.dirname(path.join(process.env.STUDIO_WORKSPACE!, seedLoginFile)), { recursive: true });
+  fs.writeFileSync(path.join(process.env.STUDIO_WORKSPACE!, seedLoginFile), seedLoginText);
 }
 const seedExchangesPath = process.env.STUDIO_WORKSPACE ? path.join(process.env.STUDIO_WORKSPACE, ".e2e-seed", "exchanges.json") : "";
 if (seedExchangesPath) {

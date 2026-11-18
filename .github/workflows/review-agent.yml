@@ -9,7 +9,9 @@ name: Review agent
 #              `dogfood-mac` runner; it is only an extra required pre-screen
 #              (secrets, leaks, CHANGELOG/docs) and NEVER approves — a human
 #              approval is still required.
-# A provider without its credential fails closed. See docs/ops/release-pipeline.md.
+# `anthropic` and `local` without their credential fail closed. `oauth` without CLAUDE_CODE_OAUTH_TOKEN skips the review with a notice and the job
+# succeeds: no review is posted, so nothing approves; a human review is still needed wherever branch protection requires one.
+# See docs/ops/release-pipeline.md.
 #
 # Trust boundary
 #  - The `gate` job runs for every PR and FAILS (it is never skipped, because a
@@ -105,6 +107,7 @@ jobs:
           persist-credentials: false
 
       - name: Validate inputs and credentials
+        id: creds
         env:
           OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -114,7 +117,13 @@ jobs:
           [[ "$EVENT_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::invalid head sha"; exit 1; }
           [[ "$BASE_REF" =~ ^[A-Za-z0-9._/-]+$ && "$BASE_REF" != -* ]] || { echo "::error::unsupported base branch name"; exit 1; }
           case "$PROVIDER" in
-            oauth)     [ -n "$OAUTH_TOKEN" ] || { echo "::error::REVIEW_PROVIDER=oauth but CLAUDE_CODE_OAUTH_TOKEN is not set (create one with 'claude setup-token'); a human must review this PR."; exit 1; } ;;
+            oauth)
+              if [ -z "$OAUTH_TOKEN" ]; then
+                # Not a failure: the review is skipped (every later step is conditional on this output) and no review is posted.
+                echo "skip=true" >> "$GITHUB_OUTPUT"
+                echo "::notice::The review was skipped: REVIEW_PROVIDER=oauth but the CLAUDE_CODE_OAUTH_TOKEN secret is not set (create one with 'claude setup-token'). No automated review was posted; a human must review this PR."
+                exit 0
+              fi ;;
             anthropic) [ -n "$API_KEY" ]     || { echo "::error::REVIEW_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set; a human must review this PR."; exit 1; } ;;
             local)     [[ "$LOCAL_URL" =~ ^https?://[^[:space:]]+$ ]] || { echo "::error::REVIEW_PROVIDER=local but REVIEW_LOCAL_URL is not set to an http(s) URL."; exit 1; } ;;
           esac
@@ -123,6 +132,7 @@ jobs:
           done
 
       - name: Fetch the PR head and check it is current
+        if: steps.creds.outputs.skip != 'true'
         run: |
           git fetch --no-tags origin "pull/${PR}/head:prhead"
           head_sha=$(git rev-parse prhead)
@@ -139,6 +149,7 @@ jobs:
           fi
 
       - name: Pre-screen the diff for secrets
+        if: steps.creds.outputs.skip != 'true'
         run: |
           # Deterministic, no model: fail on credential-shaped strings in added lines.
           # (No `grep -q` at the end of a pipeline: under pipefail an early exit can
@@ -159,6 +170,7 @@ jobs:
           git diff "origin/${BASE_REF}...prhead" > "$RUNNER_TEMP/pr.diff"
 
       - name: Build the review prompt
+        if: steps.creds.outputs.skip != 'true'
         run: |
           size=$(wc -c < "$RUNNER_TEMP/pr.diff")
           if [ "$size" -gt 400000 ]; then
@@ -202,11 +214,12 @@ jobs:
           } > "$RUNNER_TEMP/prompt.txt"
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        if: env.PROVIDER != 'local'
+        if: env.PROVIDER != 'local' && steps.creds.outputs.skip != 'true'
         with:
           node-version: "22"
 
       - name: Run the reviewer
+        if: steps.creds.outputs.skip != 'true'
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ env.PROVIDER == 'oauth' && secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
           ANTHROPIC_API_KEY: ${{ env.PROVIDER == 'anthropic' && secrets.ANTHROPIC_API_KEY || '' }}
@@ -227,6 +240,7 @@ jobs:
           [ -s "$RUNNER_TEMP/review.md" ] || { echo "::error::the reviewer returned nothing"; exit 1; }
 
       - name: Parse the verdict and check the reply
+        if: steps.creds.outputs.skip != 'true'
         env:
           OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -248,6 +262,7 @@ jobs:
           echo "VERDICT=$verdict" >> "$GITHUB_ENV"
 
       - name: Re-check freshness and submit
+        if: steps.creds.outputs.skip != 'true'
         run: |
           # Between the review and now the PR may have moved: bind to the reviewed commit.
           current_head=$(gh api "repos/${REPO}/pulls/${PR}" --jq .head.sha)

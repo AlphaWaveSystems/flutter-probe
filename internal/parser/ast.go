@@ -39,6 +39,8 @@ const (
 	StateChecked
 	StateContains // contains "text"
 	StateFocused  // has keyboard focus
+	StateFilled   // a text field that holds at least one character (the text itself is never read out)
+	StateEmpty    // a text field that holds no character
 )
 
 // ---- Node interface ----

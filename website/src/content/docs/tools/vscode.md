@@ -49,13 +49,18 @@ Access via the Command Palette (`Cmd+Shift+P`):
 
 ## Installation
 
-### From VSIX (local build)
+### Build and install a VSIX from the repository
 
-The extension is pre-built in the repository:
+The repository does not carry a pre-built `.vsix`, and it has no workflow that publishes the extension to a marketplace. Build the package yourself (it needs Node.js):
 
 ```bash
-code --install-extension vscode/flutterprobe-0.1.0.vsix
+cd vscode
+npm ci
+npm run package        # runs vsce package; writes flutterprobe-<version>.vsix in this folder
+code --install-extension flutterprobe-*.vsix
 ```
+
+`<version>` is the `version` in `vscode/package.json`. The build compiles the extension first (`vscode:prepublish`).
 
 ### From source
 

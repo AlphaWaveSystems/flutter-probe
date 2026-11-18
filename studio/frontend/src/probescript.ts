@@ -48,7 +48,7 @@ export function registerProbeScript(): void {
       "store", "as", "verify", "external", "browser", "opened",
       "call", "GET", "POST", "PUT", "DELETE", "body",
       "below", "above", "left", "right", "of",
-      "is", "focused", "visible", "present",
+      "is", "focused", "filled", "empty", "visible", "present",
       "take", "screenshot", "called",
       "animations", "to", "end",
       "copy", "paste", "clipboard",

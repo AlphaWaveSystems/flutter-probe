@@ -66,7 +66,7 @@ FlutterProbe's `wait until` command polls the widget tree directly with configur
 
 `integration_test` operates inside the Flutter engine. It cannot tap native permission prompts, system keyboards, or OS-level alerts. If your app requests camera access or location permissions, `integration_test` cannot automate that step.
 
-FlutterProbe handles permissions, clipboard access, and GPS location natively. Commands like `set location 37.7749, -122.4194` and `grant permission camera` work across Android and iOS without platform-specific workarounds. See the [Android](/platform/android/) and [iOS](/platform/ios/) platform guides for details.
+FlutterProbe handles permissions, clipboard access, and GPS location natively. Commands like `set location 37.7749, -122.4194` and `allow permission "camera"` work across Android and iOS without platform-specific workarounds. See the [Android](/platform/android/) and [iOS](/platform/ios/) platform guides for details.
 
 ### 4. No built-in reporting
 
@@ -90,7 +90,7 @@ FlutterProbe's [visual regression](/advanced/visual-regression/) feature capture
 
 When widget keys change or text is localized, `find.byKey` and `find.text` break. There is no fallback mechanism.
 
-FlutterProbe's [self-healing selectors](/advanced/self-healing/) try multiple strategies (text, key, semantic label, widget type) and automatically recover when one strategy fails. The healed selector is logged so you can update the test at your convenience.
+When a selector stops matching, FlutterProbe's failure lists the texts and keys that were on screen, and `--ai-heal` can [propose a replacement](/advanced/self-healing/) in the report. Nothing is changed automatically: you update the test.
 
 ## Migration Path
 
@@ -110,7 +110,7 @@ Switching does not require rewriting everything at once. Here is a practical app
 | Native dialog handling | No | Yes |
 | CI reporting | Manual | HTML + JUnit built-in |
 | Visual regression | No | Yes |
-| Self-healing selectors | No | Yes |
+| Advisory selector proposals on failure | No | Yes |
 | Parallel execution | No | `--parallel`, `--shard` |
 | Cloud farm support | Manual | 5 providers implemented, [not yet verified on a live account](/tools/cloud-farms/) |
 | Test recording | No | [Yes](/tools/recording/) |

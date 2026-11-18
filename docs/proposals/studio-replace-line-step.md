@@ -91,3 +91,9 @@ Each has a number to hit, so a review can say done or not done.
 2. The AI-card hardening PR: `CheckReplaceLine` gets the Running, `Depth > 0` and kept-text checks (the prerequisite above).
 3. The agent change (an agent task with unit tests, by the session the business session assigns): `editable_texts` independent of the de-duplication, raw `RichText` texts, `truncated`, the cap and the count. It needs a published agent release.
 4. The N8 code, after the design is accepted and 1 to 3 are in.
+
+## Follow-up: glyph characters (code of this note)
+The agent's text matcher also matches an `Icon`'s glyph (a private-use character) by a text selector, and the summary leaves Icon glyphs out of `rich_texts`: a replacement text that holds one could be a `Text` next to an `Icon` that shows the same glyph, where the summary shows one match and the agent matches two. So a replacement text with a private-use character, U+FFFC, U+FFFD or any unassigned code point is refused by its own rule (asked before the "plain line" rule, so it is a rule of its own and not only a case of it), and so is a text with no letter or digit.
+
+## Follow-up: the failed text already on screen (review of the code)
+The rule must also give no offer when the failed text is already visible, in any of the three lists and also inside a longer text (the agent's own match is a case-sensitive substring): then the step did not time out for want of it (a widget that cannot be hit, or a hidden one), and a step with the other spelling would act on another widget. "Sign in" with `Sign in` and `Sign In` on screen, or with `Sign In` and `Sign in with Google`, are the two cases. The match mode is also refused when the config value is anything but the default in any letter case, and when the process-wide loose switch the CLI sets is on.

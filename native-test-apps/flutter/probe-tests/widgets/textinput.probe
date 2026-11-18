@@ -39,3 +39,50 @@ test "a multi-line field takes typed text"
 test "a Cupertino text field takes typed text"
   type "hello" into #wf_cupertino_field
   see "Cupertino: hello"
+
+# `see #id is filled` and `is empty` say whether a text field holds a character, and nothing about the text. They need a probe_agent that reports the see_filled capability.
+test "a field is empty, filled by typing, and empty again after clear"
+  see #wf_textfield is empty
+  don't see #wf_textfield is filled
+  type "x" into #wf_textfield
+  see #wf_textfield is filled
+  don't see #wf_textfield is empty
+  clear #wf_textfield
+  see #wf_textfield is empty
+
+test "spaces are characters: a field of spaces is filled"
+  type "   " into #wf_textfield
+  see #wf_textfield is filled
+  don't see #wf_textfield is empty
+
+# The check works on a password field too, and the value is never in the answer: the step passes or fails on the length alone.
+test "a password field is empty, then filled, then empty, without its value being read"
+  see #wf_password is empty
+  type "secret" into #wf_password
+  see #wf_password is filled
+  don't see #wf_password is empty
+  see "Password length: 6"
+  clear #wf_password
+  see #wf_password is empty
+  see "Password length: 0"
+
+test "a form field, a multi-line field and a Cupertino field are fields too"
+  see #wf_formfield is empty
+  type "x" into #wf_formfield
+  see #wf_formfield is filled
+  see #wf_multiline is empty
+  type "line one" into #wf_multiline
+  see #wf_multiline is filled
+  see #wf_cupertino_field is empty
+  type "hello" into #wf_cupertino_field
+  see #wf_cupertino_field is filled
+
+# Below the fold: a space of a screen height plus 600 dp and then one widget. A ListView builds only the children near the viewport, so the widget is not in the tree until a scroll reaches it.
+test "a field below the fold: scroll to it, type into it, scroll back"
+  don't see #wf_bottom_field
+  scroll down until #wf_bottom_field appears
+  see #wf_bottom_field is empty
+  type "end" into #wf_bottom_field
+  see "Lower field: end"
+  see #wf_bottom_field is filled
+  scroll up until #wf_textfield appears

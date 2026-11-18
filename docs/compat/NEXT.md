@@ -20,7 +20,7 @@ A ranked list of the widgets that apps use most and that `MATRIX.md` has not ass
 | 3 | `Icon`, `Image`, `FlutterLogo`, `CircleAvatar` | 19, 7, 7, 5 | Text and display | assessed: `display` screen on two named devices (see `MATRIX.md`); a semantic label is found and, since the fix for issue #818, read | how a widget with no text is found |
 | 4 | `ListView` (and `.builder`), `SingleChildScrollView`, `CustomScrollView` + `SliverList`, `GridView`, `Scrollbar` | 12, 7, 5 + 4, 3, 3 | Lists and scrolling | assessed: `lists` screen, `ListView.builder`, `GridView.count`, `SliverList`, `SingleChildScrollView`, and a `Scrollbar` around a list (transparent to `scroll`, `tap` and `see`; its thumb cannot be selected), on two named devices (Android and iOS) with Flutter 3.44.8, and earlier on a build by each Flutter on one emulator (see `MATRIX.md`) | scrolling to an item that is not built yet |
 | 5 | `Card` + `ListTile`, `CupertinoListTile` | 9 + 8, 2 | Layout and containers (`Card`); Lists and scrolling (the tiles) | assessed: the tiles on the `lists` screen, on a build by each Flutter on one emulator (see `MATRIX.md`); `Card` alone stays in Layout and containers | tapping a row and reading its subtitle |
-| 6 | `CircularProgressIndicator`, `LinearProgressIndicator` | 8, 1 | Text and display | not assessed | waiting for a spinner to go away |
+| 6 | `CircularProgressIndicator`, `LinearProgressIndicator` | 8, 1 | Text and display | assessed: `progress` screen (its own family), a spinner waited for until it goes away, one that never does, a progress bar, on two named devices (see `MATRIX.md`) | waiting for a spinner to go away |
 | 7 | `GestureDetector`, `InkWell` | 7, 5 | Gestures | not assessed | a tap on a text inside a gesture widget |
 | 8 | `AlertDialog`, `Dialog`, `CupertinoAlertDialog`, `CupertinoActionSheet` | 5, 1, 1, 2 | Dialogs and sheets | assessed on Android: `dialogs` screen, `AlertDialog`, `CupertinoAlertDialog`, `CupertinoActionSheet` and a bottom sheet on a build by each Flutter on one emulator (see `MATRIX.md`); `Dialog` alone and iOS not run | a dialog's text, its actions, and closing it |
 | 9 | `SnackBar` (through `ScaffoldMessenger`) | 4 | Dialogs and sheets | assessed on Android: `dialogs` screen, a `SnackBar` with an action, on a build by each Flutter on one emulator (see `MATRIX.md`) | a message that appears and goes away by itself |
@@ -160,7 +160,7 @@ These cells are "partly" or "not assessed" inside families that already have a s
   - `is enabled` and `is disabled` on the other button kinds (only `ElevatedButton` is read);
   - a button inside a dialog (item 8) and inside a list (item 4);
   - a `double tap`.
-- **Scroll** is "not assessed" in every family: item 4 settles it for lists, and each existing screen needs one widget below the fold, reached with `scroll down until ... appears`.
+- **Scroll:** settled for lists (item 4) and, with one widget below the fold on each screen, for text and display, buttons, text input, selection controls and navigation (Android, both Flutter versions). It stays "not assessed" for WebView content (there is no scroll step for page content), and on iOS for every family but lists.
 - **WebView content:** scrolling in the page (there is no WebView scroll step), and iOS (`webview_flutter_wkwebview`).
 
 ## Limits
