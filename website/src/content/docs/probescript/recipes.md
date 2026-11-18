@@ -10,7 +10,7 @@ Recipes are reusable step sequences that reduce duplication across tests. They a
 A recipe is declared with `recipe` followed by a quoted name and optional parameters in parentheses:
 
 ```
-recipe "log in as" (email, password)
+recipe "sign in as" (email, password)
   open the app
   wait until "Sign In" appears
   tap "Sign In"
@@ -22,6 +22,10 @@ recipe "log in as" (email, password)
 
 Parameters are referenced with angle brackets (`<email>`, `<password>`) inside the recipe body.
 
+### Naming a recipe
+
+A call is the name written as a step, so the name must not start with a ProbeScript keyword. `recipe "log in as"` parses, but `log in as "user@test.com" with "secret123"` is read as the `log` step followed by a stray call, and the run stops with `unknown step "as <arg> with <arg>"`. Start the name with another word (`sign in as`, `login as`). `probe lint` warns on a recipe declared with a keyword name, and names the word.
+
 ## Using Recipes
 
 Import a recipe file with `use`, then call the recipe by name, passing arguments as quoted strings:
@@ -30,7 +34,7 @@ Import a recipe file with `use`, then call the recipe by name, passing arguments
 use "recipes/auth.probe"
 
 test "logged-in user can view profile"
-  log in as "user@test.com" with "secret123"
+  sign in as "user@test.com" with "secret123"
   tap "Profile"
   see "user@test.com"
 ```

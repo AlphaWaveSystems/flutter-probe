@@ -168,6 +168,7 @@ Lint checks the references a run would resolve, without running a step, and fail
 It warns, without failing, when:
 
 - A `<name>` placeholder is not an example column, a recipe parameter, a value stored with `store` or `read ... with ai`, one of the runtime values `clipboard`, `response.status` or `response.body`, or a `<random.*>` generator. A run leaves such a placeholder in the text as written.
+- A recipe is declared with a name that starts with a ProbeScript keyword (`recipe "log in as"`). A call to it is read as that keyword's step plus a stray call and fails as an unknown step, so the recipe can never run; start the name with another word (`sign in as`).
 - A `use` names a file that does not exist. A run only needs that file when a call uses one of its recipes, and such a call is reported as an unknown step.
 - A `see` or `wait until ... appears` whose text is a count or a zero state (`see "0 items"`, `wait until "No items" appears`) and has no `matching` pattern, because a substring match also passes on "10 items". Anchor the pattern for an exact check: `see "0 items" matching "^0 items$"`. A `matching` pattern anchored at both ends (`^...$`) silences the warning; any other pattern is still a substring match and is still flagged.
 
