@@ -457,7 +457,7 @@ Takes the same arguments as run_tests (see its description for the flags), inclu
 	},
 	{
 		Name:        "lint",
-		Description: "Validate .probe files without running them. Fails on a step or recipe call that resolves to nothing and on a selector that can never match; warns on unresolved placeholders, unknown use files and count or zero-state text checks. It also checks hook and composite test bodies, which `probe test --dry-run` does not.",
+		Description: "Validate .probe files without running them. Fails on a step or recipe call that resolves to nothing and on a selector that can never match; warns on unresolved placeholders, unknown use files, count or zero-state text checks, and a recipe declared with a name that a call cannot reach (it starts with a ProbeScript keyword or a filler word the parser drops, or has capital letters). It also checks hook and composite test bodies, which `probe test --dry-run` does not.",
 		InputSchema: mcpSchema{
 			Type: "object",
 			Properties: map[string]mcpProp{

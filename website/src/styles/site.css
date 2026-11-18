@@ -15,8 +15,8 @@
   --purple: #a78bfa;
   --amber: #f5b731;
   --coral: #ff8a80;
-  --font: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
   --gutter: clamp(1rem, 4vw, 2rem);
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
