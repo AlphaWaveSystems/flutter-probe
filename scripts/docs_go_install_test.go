@@ -19,8 +19,10 @@ import (
 const goInstallRoot = ".."
 
 var (
-	moduleLine    = regexp.MustCompile(`(?m)^module\s+(\S+)\s*$`)
-	goInstallLine = regexp.MustCompile("go install\\s+(?:-\\S+\\s+)*([^\\s`'\"\\\\)]+)")
+	moduleLine = regexp.MustCompile(`(?m)^module\s+(\S+)\s*$`)
+	// go install, then any flags (-v, -ldflags=... or -ldflags "..." with a quoted value) and make or shell variables ($(LDFLAGS),
+	// ${FLAGS}, $FLAGS), then the target, which may itself be quoted.
+	goInstallLine = regexp.MustCompile("go install\\s+(?:(?:-[\\w-]+(?:=(?:\"[^\"]*\"|'[^']*'|\\S+))?\\s+(?:(?:\"[^\"]*\"|'[^']*')\\s+)?)|(?:\\$\\([^)]*\\)|\\$\\{[^}]*\\}|\\$\\w+)\\s+)*[\"']?([^\\s`'\"\\\\)]+)")
 )
 
 // ourOrg is the organisation's prefix, compared without case: a target that starts with it must be spelled right.
@@ -87,7 +89,8 @@ func declaredModules(t *testing.T) []string {
 func TestGoInstallLinesUseTheDeclaredModulePath(t *testing.T) {
 	mods := declaredModules(t)
 	exts := map[string]bool{".md": true, ".mdx": true, ".astro": true, ".yml": true, ".yaml": true, ".txt": true, ".sh": true, ".json": true}
-	skipFiles := map[string]bool{"CHANGELOG.md": true} // history: it may quote what a page once said
+	named := map[string]bool{"Makefile": true, "makefile": true, "GNUmakefile": true} // files with no extension that hold commands
+	skipFiles := map[string]bool{"CHANGELOG.md": true}                                // history: it may quote what a page once said
 	scanned := 0
 	var problems []string
 	err := filepath.WalkDir(goInstallRoot, func(path string, d fs.DirEntry, err error) error {
@@ -101,7 +104,7 @@ func TestGoInstallLinesUseTheDeclaredModulePath(t *testing.T) {
 			}
 			return nil
 		}
-		if !exts[filepath.Ext(path)] || skipFiles[d.Name()] {
+		if !(exts[filepath.Ext(path)] || named[d.Name()]) || skipFiles[d.Name()] {
 			return nil
 		}
 		b, err := os.ReadFile(path)
@@ -141,6 +144,13 @@ func TestBadGoInstallTargetsCases(t *testing.T) {
 		{"a module that does not exist", "go install github.com/alphawavesystems/nothing/cmd/x@latest", []string{"github.com/alphawavesystems/nothing/cmd/x@latest"}},
 		{"another organisation", "go install github.com/wailsapp/wails/v2/cmd/wails@latest", nil},
 		{"a local path", "go install ./cmd/probe", nil},
+		{"a quoted target", `go install "github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest"`, []string{"github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest"}},
+		{"a single-quoted target", "go install 'github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest'", []string{"github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest"}},
+		{"a flag with a quoted value", `go install -ldflags "-s -w" github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest`, []string{"github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest"}},
+		{"a flag with an = and quotes", `go install -ldflags="-s -w -X main.V=1" github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest`, []string{"github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest"}},
+		{"a quoted flag value and a declared target", `go install -ldflags "-s -w" github.com/alphawavesystems/flutter-probe/cmd/probe@latest`, nil},
+		{"a Makefile recipe line", "\tgo install $(LDFLAGS) github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest\n", []string{"github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest"}},
+		{"a Makefile line with a local path", "\tgo install $(LDFLAGS) ./cmd/probe\n", nil},
 		{"a prefix that is not a path element", "go install github.com/alphawavesystems/flutter-probe-extras/cmd/x@latest", []string{"github.com/alphawavesystems/flutter-probe-extras/cmd/x@latest"}},
 	} {
 		got := badGoInstallTargets(tc.text, mods)

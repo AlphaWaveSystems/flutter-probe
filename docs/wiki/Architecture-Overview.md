@@ -40,7 +40,7 @@ The CLI is the orchestrator. It parses `.probe` test files, manages device conne
 | `config/` | `probe.yaml` parsing with layered resolution (CLI flag > config > default) |
 | `report/` | HTML report generation with portable relative paths |
 | `cloud/` | Cloud provider integration (BrowserStack, SauceLabs, AWS, Firebase, LambdaTest) |
-| `ai/` | Self-healing selectors and LLM-based test generation |
+| `ai/` | LLM-based test generation and advisory selector proposals (`--ai-heal`) |
 | `visual/` | Screenshot-based visual regression testing |
 | `plugin/` | YAML-based custom command system |
 

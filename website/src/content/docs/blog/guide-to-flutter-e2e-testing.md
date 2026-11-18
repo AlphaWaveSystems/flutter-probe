@@ -207,7 +207,7 @@ probe test tests/ --screenshot-on-failure --capture-logs
 
 **Testing implementation details.** E2E tests should verify user-visible behavior, not internal widget structure. If you are asserting on widget keys or specific widget types deep in the tree, you are testing implementation details that will break on refactoring.
 
-**Skipping test maintenance.** UI changes break E2E tests. Budget time for test maintenance in every sprint. FlutterProbe's [self-healing selectors](/advanced/self-healing/) reduce this burden but do not eliminate it entirely.
+**Skipping test maintenance.** UI changes break E2E tests. Budget time for test maintenance in every sprint. FlutterProbe's failure messages and [advisory selector proposals](/advanced/self-healing/) point at the likely fix, but you still update the test.
 
 ## Next Steps
 
