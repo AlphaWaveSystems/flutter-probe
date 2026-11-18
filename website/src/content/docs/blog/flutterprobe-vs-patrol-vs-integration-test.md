@@ -131,4 +131,4 @@ No tool is perfect. Here is where FlutterProbe has real limitations:
 
 These recommendations are not absolute. Evaluate based on your specific project size, team composition, CI infrastructure, and device coverage requirements. You can also combine tools — use `integration_test` for a small smoke suite and FlutterProbe for comprehensive regression testing.
 
-For migration between tools, see the [migration guide](/getting-started/migration/). For a broader look at the testing landscape, see the [Flutter UI testing overview](/comparisons/flutter-ui-testing/).
+For migration from other tools, see [probe-convert](/tools/probe-convert/), which reads Maestro, Gherkin, Robot Framework, Detox and Appium tests (not `integration_test` or Patrol). For a broader look at the testing landscape, see the [Flutter UI testing overview](/comparisons/flutter-ui-testing/).
