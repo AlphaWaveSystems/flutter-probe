@@ -41,7 +41,7 @@ var (
 	legalAttrHref    = regexp.MustCompile(`\bhref="([^"]*)"`)
 	legalAttrLang    = regexp.MustCompile(`\bhreflang="([^"]*)"`)
 	legalAttrSlug    = regexp.MustCompile(`'/[a-z-]+/'`)
-	legalSwitchedOff = regexp.MustCompile(`\{\s*\(?\s*(?:false|null|undefined|!1|!true|''|""|NaN)\s*\)?\s*(?:&&|\?)|\{\s*true\s*(?:\|\||\?\s*(?:null|undefined|''|"")\s*:)|&&\s*(?:false|null|undefined)\s*\}|<!--|\{/\*|<template\b|\shidden[\s=>]|display\s*:\s*none`)
+	legalSwitchedOff = regexp.MustCompile(`(?i)\{\s*\(?\s*(?:false|null|undefined|0|!1|!true|!!0|void 0|''|""|NaN)\s*\)?\s*(?:&&|\?)|\{\s*true\s*(?:\|\||\?\s*(?:null|undefined|''|"")\s*:)|&&\s*(?:false|null|undefined)\s*\}|<!--|\{/\*|<(?:template|noscript)\b|<[^<>]*\shidden[\s=/>]|display\s*:\s*none|font-size\s*:\s*0|sr-only|text/plain`)
 	legalBlocks      = regexp.MustCompile(`<(h2|li|p|ul)\b`)
 )
 
@@ -328,7 +328,7 @@ func TestLegalPagesKeepTheirRequiredClauses(t *testing.T) {
 	for page, want := range counted {
 		src := readSite(t, "src/pages/"+page+".astro")
 		// A counted clause still counts when the line is commented out or switched off, so no legal page may use the plain ways of doing either
-		// (a pattern cannot see every way: a condition held in a variable passes, and the review of the page is what catches it).
+		// (a pattern cannot see every way: a condition held in a variable or a comparison that is always false passes, and the review of the page is what catches it).
 		if m := legalSwitchedOff.FindString(src); m != "" {
 			t.Errorf("%s.astro contains %q: a clause is printed or removed, not switched off", page, m)
 		}
@@ -478,6 +478,28 @@ func TestBuiltSiteCheckRefusesLoadsFromAnotherHost(t *testing.T) {
 		{"the second image of a set", "_astro/a.css", `a{background:image-set("/a.png" 1x, "https://img.example.com/i.png" 2x)}`, "img.example.com"},
 		{"an escaped stylesheet address", "_astro/a.css", `a{background:url(https\:\/\/img.example.com/i.png)}`, "img.example.com"},
 		{"an inline image in a stylesheet", "_astro/a.css", `a{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E")}`, ""},
+		{"a minified import", "_astro/a.css", `@import"https://fonts.example.com/c.css";`, "fonts.example.com"},
+		{"a quoted address in a style attribute", "index.html", `<div style="background:url(&quot;https://img.example.com/bg.png&quot;)"></div>`, "img.example.com"},
+		{"an import map", "index.html", `<script type="importmap">{"imports":{"lib":"https://cdn.example.com/lib.js"}}</script>`, "cdn.example.com"},
+		{"speculation rules", "index.html", `<script type="speculationrules">{"prefetch":[{"urls":["https://evil.example/next"]}]}</script>`, "evil.example"},
+		{"a script whose data-type says json", "index.html", `<script data-type="application/json">fetch("https://stats.example.com/hit")</script>`, "stats.example.com"},
+		{"the first of two src", "index.html", `<img src="https://img.example.com/x.png" src="/a.png">`, "img.example.com"},
+		{"the first of two rel", "index.html", `<link rel="stylesheet" rel="canonical" href="https://evil.example/a.css">`, "evil.example"},
+		{"an attribute named inside another", "index.html", `<img src="https://img.example.com/x.png" alt="set src=/a.png here">`, "img.example.com"},
+		{"a rel named inside a class", "index.html", `<link rel="stylesheet" href="https://evil.example/a.css" class="x rel=me y">`, "evil.example"},
+		{"an escaped address in a script file", "_astro/b.js", `fetch("https:\/\/stats.example.com\/b")`, "stats.example.com"},
+		{"an event handler", "index.html", `<img src="/a.png" onload="fetch('https://stats.example.com/hit')">`, "stats.example.com"},
+		{"a javascript link", "index.html", `<a href="javascript:fetch('https://stats.example.com/hit')">x</a>`, "stats.example.com"},
+		{"backslashes for slashes", "index.html", `<img src="https:\\img.example.com/x.png">`, "img.example.com"},
+		{"a quoted refresh", "index.html", `<meta http-equiv="refresh" content="0;url='https://evil.example/'">`, "evil.example"},
+		{"a space before the address in a script", "index.html", `<script>fetch(" https://stats.example.com/hit")</script>`, "stats.example.com"},
+		{"a single-quoted attribute", "index.html", `<img src='https://img.example.com/x.png'>`, "img.example.com"},
+		{"a button that sends elsewhere", "index.html", `<form><button formaction="https://forms.example.com/s">x</button></form>`, "forms.example.com"},
+		{"an object", "index.html", `<object data="https://video.example.com/x.swf"></object>`, "video.example.com"},
+		{"an old-style svg reference", "index.html", `<svg><image xlink:href="https://img.example.com/x.png"/></svg>`, "img.example.com"},
+		{"a host that starts like a parse base", "_astro/b.js", `fetch("https://p.evil.example/x")`, "p.evil.example"},
+		{"a host path that starts like a namespace", "_astro/b.js", `fetch("http://www.w3.org/2000/svg/x")`, "www.w3.org"},
+		{"markup quoted inside a data block", "index.html", `<script type="application/ld+json">{"description":"<img src='https://example.org/x.png'>"}</script>`, ""},
 		{"a fonts stylesheet", "index.html", `<link href="https://fonts.googleapis.com/css2?family=X" rel="stylesheet">`, "fonts.googleapis.com"},
 		{"a preconnect", "docs/index.html", `<link rel=preconnect href=https://fonts.gstatic.com crossorigin>`, "fonts.gstatic.com"},
 		{"a script", "index.html", `<script async src="//cdn.example.com/a.js"></script>`, "cdn.example.com"},

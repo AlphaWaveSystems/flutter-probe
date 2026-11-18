@@ -1,6 +1,6 @@
 # flutterprobe.dev
 
-The website and docs (Astro and Starlight). `npm ci`, then `npm run dev` to work on it and `npm run build` to build it into `dist/`. The build runs the truth check first (below) and ends with `scripts/check-dist.mjs`, which reads the built pages, stylesheets and scripts and refuses an address on another host that a page would load from or send to, and a script that assigns to a cookie: the privacy notice says the website does neither. Its header lists what it reads and what it cannot see; `TestBuiltSiteCheckRefusesLoadsFromAnotherHost` in `scripts/site_legal_pages_test.go` holds its cases.
+The website and docs (Astro and Starlight). `npm ci`, then `npm run dev` to work on it and `npm run build` to build it into `dist/`. The build runs the truth check first (below) and ends with `scripts/check-dist.mjs`, a guard against mistakes: it reads the built pages, stylesheets and scripts and refuses the written-out ways of loading from another host, and a script that assigns to a cookie (the privacy notice says the website does neither). It reads text with patterns and is not a proof; its header lists what it refuses and what it does not see, and a change that adds a script or an embed still needs a reviewer to look. `TestBuiltSiteCheckRefusesLoadsFromAnotherHost` in `scripts/site_legal_pages_test.go` holds its cases.
 
 ## What is sellable
 
