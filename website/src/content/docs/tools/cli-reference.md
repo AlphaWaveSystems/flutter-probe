@@ -83,7 +83,6 @@ probe test [path] [flags]
 | `--clear-data-before-each-test` | `false` | Wipe the app's data and relaunch before every test (also `defaults.clear_data_before_each_test`). Asked once for each device of the run (a parallel run: once in each lane); `--yes` or the question answers it, and on a simulator or emulator `probe prefs set clear-data-without-asking on` answers the question for you. A parallel run (`--devices`) needs `--yes` (its lanes cannot ask) and logs once what it will wipe. The clear and relaunch count against `--test-timeout`. `=false` overrides a `probe.yaml` that turns it on |
 | `--no-grant-on-clear` | `false` | After `clear app data` keep runtime permissions revoked even with `--yes`, so a test can see the first-run permission dialog. A parallel or composite run follows it too |
 | `-y, --yes` | `false` | Auto-confirm destructive ops + auto-grant permissions. In a parallel or composite run it is the only consent for `clear app data`: without it a device is wiped only when the person has allowed simulators and emulators in `probe prefs` and the device is verified as one. A refused wipe fails with the hint to pass `--yes` (on an iOS simulator notifications cannot be granted this way: pass `--grant notifications` to answer the alert) |
-| `--watch` | `false` | Watch mode — re-run on file changes |
 | `--video` | `false` | Enable video recording per test |
 | `--video-resolution` | `720x1280` | Android screenrecord resolution |
 | `--video-framerate` | `2` | Video framerate (fps) |

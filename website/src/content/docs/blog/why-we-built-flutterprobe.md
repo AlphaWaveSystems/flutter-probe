@@ -63,7 +63,7 @@ Most mobile E2E testing tools work through platform-level UI automation framewor
 
 FlutterProbe's Dart agent runs inside the Flutter process and has direct access to the widget tree. When the Go CLI sends a "tap 'Submit' button" command, the agent traverses the widget tree, finds the matching element, and executes the gesture directly. No platform bridge, no accessibility layer translation.
 
-This is why commands are resolved directly in the app. It is also why FlutterProbe can implement features like self-healing selectors — the agent has full visibility into widget types, keys, labels, and tree structure, so it can find elements even when the tree changes slightly between app versions.
+This is why commands are resolved directly in the app. It is also why a failed step can say what the screen showed instead — the agent has full visibility into widget types, keys, labels, and tree structure, so the failure lists the visible texts and keys.
 
 ## Architecture Decisions and Trade-offs
 
@@ -83,7 +83,7 @@ Every architecture involves trade-offs. Here are the ones we made consciously.
 
 **Build-once architecture changes CI economics.** Our CI E2E time dropped from 35 minutes to 8 minutes. That changed developer behavior — they started actually waiting for E2E results before merging, instead of merging and hoping.
 
-**Self-healing selectors reduce maintenance but do not eliminate it.** When a UI redesign moves a button from the app bar to a floating action button, the selector might still find it by label. But when a flow is restructured — two screens merged into one, or a step removed — the test needs manual updating. Self-healing handles the small changes; humans handle the structural ones.
+**Selector proposals reduce maintenance but do not eliminate it.** When a UI redesign renames a button's label, the failure lists what is on screen and, with `--ai-heal`, the report proposes a replacement for you to apply. When a flow is restructured — two screens merged into one, or a step removed — the test needs manual updating. Proposals help with the small changes; humans handle the structural ones.
 
 ## What Is Next
 
