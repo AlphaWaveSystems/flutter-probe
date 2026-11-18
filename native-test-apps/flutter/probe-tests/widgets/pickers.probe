@@ -1,10 +1,10 @@
 # Needs the pickers build: flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=pickers (see the README).
 # What each test shows is also in docs/compat/MATRIX.md: a matrix cell is set only from a test that ran.
 #
-# A DropdownButton keeps its items in an IndexedStack. Before the fix of issue #900 the agent saw the children of an IndexedStack that are not shown with
-# Flutter 3.50.0 (and not with 3.44.8), so a suite that asserted whether the items of a closed dropdown are seen gave different results on the two versions:
-# see the matrix section and native-test-apps/flutter/test/indexed_stack_hidden_test.dart. Most tests below prove what they need through behaviour that is the
-# same everywhere: a state text that changes, a counter, a tap that reaches or does not reach another widget. The items of a PopupMenuButton exist only while
+# A DropdownButton keeps its items in an IndexedStack. Before the fix of issue #900 (#901) the agent saw the children of an IndexedStack that are not shown with
+# Flutter 3.50.0 (and not with 3.44.8), so a closed dropdown's items were seen on one version and not on the other; the first test below asserts that they are
+# not, on both. Most tests prove what they need through behaviour that is the same everywhere: a state text that changes, a counter, a tap that reaches or
+# does not reach another widget. See native-test-apps/flutter/test/pickers_indexed_stack_regression_test.dart. The items of a PopupMenuButton exist only while
 # its menu is open.
 #
 # A menu is a route: `wait for animations to end` waits for it to open or to close.
