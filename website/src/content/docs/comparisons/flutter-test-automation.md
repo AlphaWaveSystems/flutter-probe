@@ -51,7 +51,7 @@ jobs:
         with:
           flutter-version: '3.27.0'
       - name: Install FlutterProbe
-        run: go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest
+        run: go install github.com/alphawavesystems/flutter-probe/cmd/probe@latest
       - name: Build and test
         run: |
           flutter build apk --debug --dart-define=PROBE_AGENT=true

@@ -40,7 +40,7 @@ brew tap AlphaWaveSystems/tap
 brew install probe
 
 # Or via go install (good for CI)
-go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest
+go install github.com/alphawavesystems/flutter-probe/cmd/probe@latest
 ```
 
 Add the FlutterProbe Dart agent to your app's dev dependencies:
@@ -134,7 +134,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.27.0'
-      - run: go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest
+      - run: go install github.com/alphawavesystems/flutter-probe/cmd/probe@latest
       - run: flutter build apk --debug --dart-define=PROBE_AGENT=true
       - run: probe test tests/ --format junit -o results.xml -y
       - uses: dorny/test-reporter@v1
