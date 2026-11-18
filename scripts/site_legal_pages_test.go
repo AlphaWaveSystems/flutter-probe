@@ -3,6 +3,7 @@ package scripts
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -34,13 +35,14 @@ var (
 	legalTag      = regexp.MustCompile(`(?s)<Legal\b[^>]*>`)
 	legalLeftover = regexp.MustCompile(`\bTODO\b|(?i:\bdrafts?\b|\bborrador(?:es)?\b|\bnoindex\b|updated=)`)
 	// A page never states the version or the date itself: both come from legal.json through the layout, so the two languages cannot differ.
-	legalOwnVersion = regexp.MustCompile(`(?i)\bversi[oó]n \d|\bvigente desde\b|\beffective (?:from |on )?\d|\b20\d\d-\d\d-\d\d\b`)
-	legalHref       = regexp.MustCompile(`href="(/[^"#]*)`)
-	legalAnchor     = regexp.MustCompile(`<a\b[^>]*>`)
-	legalAttrHref   = regexp.MustCompile(`\bhref="([^"]*)"`)
-	legalAttrLang   = regexp.MustCompile(`\bhreflang="([^"]*)"`)
-	legalAttrSlug   = regexp.MustCompile(`'/[a-z-]+/'`)
-	legalBlocks     = regexp.MustCompile(`<(h2|li|p|ul)\b`)
+	legalOwnVersion  = regexp.MustCompile(`(?i)\bversi[oó]n \d|\bvigente desde\b|\beffective (?:from |on )?\d|\b20\d\d-\d\d-\d\d\b`)
+	legalHref        = regexp.MustCompile(`href="(/[^"#]*)`)
+	legalAnchor      = regexp.MustCompile(`<a\b[^>]*>`)
+	legalAttrHref    = regexp.MustCompile(`\bhref="([^"]*)"`)
+	legalAttrLang    = regexp.MustCompile(`\bhreflang="([^"]*)"`)
+	legalAttrSlug    = regexp.MustCompile(`'/[a-z-]+/'`)
+	legalSwitchedOff = regexp.MustCompile(`\b(?:false|null|undefined|0)\s*&&|&&\s*(?:false|null|undefined)\b|\?\s*(?:null|''|"")\s*:|<!--|\{/\*`)
+	legalBlocks      = regexp.MustCompile(`<(h2|li|p|ul)\b`)
 )
 
 // legalPageProblems returns what is wrong with the source of one legal page: page is its own path name, twin the other language's.
@@ -144,7 +146,7 @@ func TestLegalPagesComeInPairsAndAreNotDrafts(t *testing.T) {
 	// A switched-off or commented-out line still contains its text, so neither is allowed in the frame.
 	entity := readSite(t, "src/components/LegalEntity.astro")
 	for name, src := range map[string]string{"Legal.astro": layout, "Site.astro": frame, "LegalEntity.astro": entity} {
-		if m := regexp.MustCompile(`\bfalse\s*&&|&&\s*false\b|<!--|\{/\*`).FindString(src); m != "" {
+		if m := legalSwitchedOff.FindString(src); m != "" {
 			t.Errorf("%s contains %q: a line of the frame is printed or removed, not switched off", name, m)
 		}
 	}
@@ -316,15 +318,19 @@ func TestLegalPagesKeepTheirRequiredClauses(t *testing.T) {
 	}
 	// Numbers and limits that the two languages must both keep: each is counted, so one of two occurrences cannot change alone.
 	counted := map[string]map[string]int{
-		"terms":               {"at least 30 days before": 3, "PERIOD OF TWELVE MONTHS": 1},
-		"terminos":            {"con al menos 30 días de anticipación": 3, "PERIODO DE DOCE MESES": 1, "prevalece la versión en español": 1},
-		"privacy":             {"15 business days": 2, "20 business days": 1},
-		"aviso-de-privacidad": {"15 días hábiles": 2, "20 días hábiles": 1, "prevalece la versión en español": 1},
-		"refunds":             {"a dispute that covers the current period is open": 1, "for reasons attributable to us": 1, "we refund or credit what the law requires": 1, "we refund the difference": 1, "we refund the part of the period that was not provided": 1},
-		"reembolsos":          {"una aclaración que abarque el periodo en curso": 1, "por causas imputables a nosotros": 1, "reembolsamos o bonificamos lo que la ley exija": 1, "reembolsamos la diferencia": 1, "reembolsamos la parte del periodo que no se prestó": 1, "prevalece la versión en español": 1},
+		"terms":               {"at least 30 days before": 3, "PERIOD OF TWELVE MONTHS": 1, "IN THE TWELVE MONTHS BEFORE": 1, "within 60 days": 1},
+		"terminos":            {"con al menos 30 días de anticipación": 3, "PERIODO DE DOCE MESES": 1, "DOCE MESES ANTERIORES": 1, "dentro de los 60 días": 1, "prevalece la versión en español": 1},
+		"privacy":             {"15 business days": 2, "20 business days": 1, "the licence key we issue to the team": 1, "sets no cookies": 2, "has no analytics": 1, "when it verifies the run": 1},
+		"aviso-de-privacidad": {"15 días hábiles": 2, "20 días hábiles": 1, "la clave de licencia que emitimos al equipo": 1, "cuando verifica la ejecución": 1, "prevalece la versión en español": 1},
+		"refunds":             {"within 60 days": 1, "a dispute that covers the current period is open": 1, "for reasons attributable to us": 1, "we refund or credit what the law requires": 1, "we refund the difference": 1, "we refund the part of the period that was not provided": 1},
+		"reembolsos":          {"dentro de los 60 días": 1, "una aclaración que abarque el periodo en curso": 1, "por causas imputables a nosotros": 1, "reembolsamos o bonificamos lo que la ley exija": 1, "reembolsamos la diferencia": 1, "reembolsamos la parte del periodo que no se prestó": 1, "prevalece la versión en español": 1},
 	}
 	for page, want := range counted {
 		src := readSite(t, "src/pages/"+page+".astro")
+		// A counted clause still counts when the line is commented out or switched off, so no legal page may do either.
+		if m := legalSwitchedOff.FindString(src); m != "" {
+			t.Errorf("%s.astro contains %q: a clause is printed or removed, not switched off", page, m)
+		}
 		for w, n := range want {
 			if got := strings.Count(src, w); got != n {
 				t.Errorf("%s.astro contains %q %d time(s), want %d", page, w, got, n)
@@ -423,52 +429,62 @@ func TestCompanyPageProblems(t *testing.T) {
 	}
 }
 
-// The privacy notice says the website sets no cookies, has no analytics and that only its host sees a visit. That holds while the frame, the
-// pages, the components and the stylesheet load nothing from another host: no stylesheet, font, script, image or frame.
-func TestSitePagesLoadNothingFromAnotherHost(t *testing.T) {
-	load := regexp.MustCompile(`(?i)<(?:link|script|img|iframe|video|audio|source|embed|object)\b[^>]*\b(?:href|src|data)=["'{` + "`" + `]*(?:https?:)?//[^>]*>|@import[^;]*//|url\(\s*["']?(?:https?:)?//`)
-	own := regexp.MustCompile(`^<link rel="(?:canonical|alternate)"`)
-	n := 0
-	for _, dir := range []string{"src/layouts", "src/pages", "src/components", "src/styles"} {
-		err := filepath.WalkDir(filepath.Join("../website", dir), func(p string, d os.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
-				return err
-			}
-			raw, err := os.ReadFile(p)
-			if err != nil {
-				return err
-			}
-			n++
-			for _, m := range load.FindAllString(string(raw), -1) {
-				if !own.MatchString(m) {
-					t.Errorf("%s loads from another host: %s", p, m)
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
+// The privacy notice says the website sets no cookies, has no analytics and that only its host sees a visit. The build ends with
+// website/scripts/check-dist.mjs, which reads every built page and stylesheet, the documentation included; these are the things it refuses
+// and the things it lets through.
+func TestBuiltSiteCheckRefusesLoadsFromAnotherHost(t *testing.T) {
+	node := nodeOrSkip(t)
+	var pkg struct {
+		Scripts map[string]string `json:"scripts"`
 	}
-	if n < 15 {
-		t.Fatalf("read %d files of the site, want at least 15: the folders moved", n)
+	if err := json.Unmarshal([]byte(readSite(t, "package.json")), &pkg); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(pkg.Scripts["build"], "astro build && node scripts/check-dist.mjs") {
+		t.Errorf("the build must end with the check of the built site, is %q", pkg.Scripts["build"])
 	}
 	for _, c := range []struct {
-		src  string
-		want bool
+		name, file, body, want string
 	}{
-		{`<link href="https://fonts.googleapis.com/css2?family=X" rel="stylesheet" />`, true},
-		{`<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />`, true},
-		{`<script src="//cdn.example.com/a.js"></script>`, true},
-		{`<img alt="" src={` + "`" + `https://img.example.com/b.svg` + "`" + `} />`, true},
-		{`@import url("https://fonts.example.com/c.css");`, true},
-		{`src: url(https://fonts.example.com/d.woff2);`, true},
-		{`<a href="https://github.com/AlphaWaveSystems/flutter-probe">GitHub</a>`, false},
-		{`<link rel="icon" type="image/svg+xml" href="/favicon.svg" />`, false},
-		{`<img src="/report.png" alt="" />`, false},
+		{"a page of the site", "index.html", `<link rel="canonical" href="https://flutterprobe.dev/"><link rel="alternate" hreflang="es" href="https://flutterprobe.dev/terminos/"><link rel="stylesheet" href="/_astro/a.css"><script type="module" src="/_astro/b.js"></script><a href="https://github.com/AlphaWaveSystems/flutter-probe">GitHub</a><img src="/report.png" alt=""><svg xmlns="http://www.w3.org/2000/svg"></svg><script>fetch("/pagefind/x.json")</script>`, ""},
+		{"an own-host image", "index.html", `<img src="https://flutterprobe.dev/og-image.svg">`, ""},
+		{"a fonts stylesheet", "index.html", `<link href="https://fonts.googleapis.com/css2?family=X" rel="stylesheet">`, "fonts.googleapis.com"},
+		{"a preconnect", "docs/index.html", `<link rel=preconnect href=https://fonts.gstatic.com crossorigin>`, "fonts.gstatic.com"},
+		{"a script", "index.html", `<script async src="//cdn.example.com/a.js"></script>`, "cdn.example.com"},
+		{"an image", "docs/a/index.html", `<img alt="" src="https://img.example.com/b.png">`, "img.example.com"},
+		{"a srcset", "index.html", `<img alt="" src="/a.png" srcset="/a.png 1x, https://img.example.com/a2.png 2x">`, "img.example.com"},
+		{"a video poster", "index.html", `<video poster="https://img.example.com/p.jpg"></video>`, "img.example.com"},
+		{"a frame", "index.html", `<iframe src="https://video.example.com/embed/1"></iframe>`, "video.example.com"},
+		{"a fetch in a page script", "index.html", `<script>fetch("https://stats.example.com/hit")</script>`, "stats.example.com"},
+		{"an import in a page script", "index.html", `<script type="module">const m = await import('https://cdn.example.com/m.js')</script>`, "cdn.example.com"},
+		{"a beacon", "index.html", `<script>navigator.sendBeacon("https://stats.example.com/b", "x")</script>`, "stats.example.com"},
+		{"a cookie", "index.html", `<script>document.cookie = "seen=1"</script>`, "writes a cookie"},
+		{"a font in a page style", "index.html", `<style>@font-face{font-family:X;src:url(https://fonts.example.com/x.woff2)}</style>`, "fonts.example.com"},
+		{"a background in a style attribute", "index.html", `<div style="background:url('//img.example.com/bg.png')"></div>`, "img.example.com"},
+		{"a stylesheet import", "_astro/a.css", `@import "https://fonts.example.com/c.css";`, "fonts.example.com"},
+		{"an image-set", "_astro/a.css", `a{background:image-set("https://img.example.com/i.png" 1x)}`, "img.example.com"},
+		{"a relative stylesheet", "_astro/a.css", `a{background:url(/bg.svg)} @import "./b.css";`, ""},
+		{"no page at all", "_astro/a.css", `a{color:red}`, "no built page"},
 	} {
-		if got := load.MatchString(c.src); got != c.want {
-			t.Errorf("load(%s) = %v, want %v", c.src, got, c.want)
+		dist := t.TempDir()
+		if c.file != "index.html" && c.want != "no built page" {
+			if err := os.WriteFile(filepath.Join(dist, "index.html"), []byte("<p>x</p>"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		f := filepath.Join(dist, filepath.FromSlash(c.file))
+		if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(f, []byte(c.body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		out, err := exec.Command(node, "../website/scripts/check-dist.mjs", "--dist", dist).CombinedOutput()
+		switch {
+		case c.want == "" && err != nil:
+			t.Errorf("%s: refused: %s", c.name, out)
+		case c.want != "" && (err == nil || !strings.Contains(string(out), c.want)):
+			t.Errorf("%s: want a refusal that names %q, got err=%v: %s", c.name, c.want, err, out)
 		}
 	}
 }
