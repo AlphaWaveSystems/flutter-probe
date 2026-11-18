@@ -711,6 +711,24 @@ export namespace main {
 	        this.reason = source["reason"];
 	    }
 	}
+	export class ReplaceStepCheck {
+	    ok: boolean;
+	    line?: number;
+	    text?: string;
+	    reason?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ReplaceStepCheck(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.line = source["line"];
+	        this.text = source["text"];
+	        this.reason = source["reason"];
+	    }
+	}
 	export class ReplaceLineCheck {
 	    ok: boolean;
 	    reason: string;
@@ -833,6 +851,7 @@ export namespace main {
 	export class StepTriage {
 	    fix?: string;
 	    reason: string;
+	    replacement?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new StepTriage(source);
@@ -842,6 +861,7 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.fix = source["fix"];
 	        this.reason = source["reason"];
+	        this.replacement = source["replacement"];
 	    }
 	}
 	export class RunStep {

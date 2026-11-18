@@ -20,8 +20,10 @@ passed.
 
 1. **Merge.** A PR merges only after CI and the `review-agent.yml` check pass.
    The review agent runs an automated review and submits an approving review
-   on a clean verdict; without a configured reviewer it fails closed and the PR
-   waits for a human. It only reviews same-repository branches from owners,
+   on a clean verdict. Without a configured reviewer the `anthropic` and `local`
+   providers fail closed and the PR waits for a human; the default `oauth`
+   provider without its token skips the review with a notice and succeeds (no
+   review is posted, so nothing approves). It only reviews same-repository branches from owners,
    members and collaborators, reviews the diff (never a checkout of the PR
    branch) as untrusted input, and fails a branch that is behind `main` so a
    stale branch cannot silently revert what `main` merged since.
@@ -58,7 +60,11 @@ passed.
 ## Review agent providers
 
 The repository variable `REVIEW_PROVIDER` selects who reviews (default `oauth`).
-Whatever the mode, a missing credential fails the check; it is never skipped.
+A missing `anthropic` key or `local` URL fails the check. A missing `oauth` token
+(`CLAUDE_CODE_OAUTH_TOKEN`) does not: the review job skips every review step,
+writes a notice to the run and succeeds. No review is posted, so the check goes
+green without an approval; a human review is still needed wherever branch
+protection requires one. Set the secret to turn the automated review back on.
 
 | `REVIEW_PROVIDER` | Credential | Runs on | Can approve |
 | --- | --- | --- | --- |
@@ -119,9 +125,15 @@ git grep -n "flutter_probe_agent: *\^0" -- README.md website probe_agent/README.
 
 - **Install snippets.** The second grep lists every `flutter_probe_agent: ^0.x.y` snippet. For a 0.x package a caret constraint
   means "this minor only" (`^0.5.3` resolves to 0.5.x), so a stale snippet makes a new user fetch an agent far older than the CLI.
-  Each release sets them to the new minor (for example `^0.27.0`); historic blog posts are left alone.
-- **Canary and tag examples** in `docs/ops/release-pipeline.md`, `.github/workflows/dogfood-gate.yml` and the install guide ("Try a canary
-  build") use the current `X.Y.Z-next.N`.
+  Set them to the new minor only AFTER the agent is on pub.dev (check `https://pub.dev/api/packages/flutter_probe_agent`: its `latest.version`):
+  a snippet ahead of pub.dev makes `flutter pub get` fail for every new user. That happened with 0.27.0: the release run failed, the agent was
+  never published, and the pages said `^0.27.0` while pub.dev had 0.26.1. Until the publish succeeds the snippets keep the version that is on
+  pub.dev. The install guide leads with `flutter pub add --dev flutter_probe_agent`, which always resolves to what pub.dev has. Historic blog
+  posts are left alone.
+- **Canary and tag examples** in `docs/ops/release-pipeline.md` and `.github/workflows/dogfood-gate.yml` use the current `X.Y.Z-next.N`; the
+  install guide ("Try a canary build") uses the placeholder `vX.Y.Z-next.N`, so it needs no change.
+- **Release assets.** After the release run, list the assets of the new release: the install guide promises a Studio archive per platform, the
+  CLI and MCP binaries and the iOS driver. If one is missing, say so on the install guide ("Optional: Install Studio") until it is attached.
 - **MCP tool count**: compare the count in the README, the MCP guide and `mcpb/template/manifest.json` with the server's `tools/list`
   (`printf` an initialize and a `tools/list` request into `probe-mcp`), and update the text when it changed.
 - **Grammar**: if the parser changed, the EBNF page and `internal/parser/grammar_test.go` are updated in the same PR.

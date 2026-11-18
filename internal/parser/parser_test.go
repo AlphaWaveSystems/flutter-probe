@@ -206,7 +206,7 @@ test "dashboard test"
 }
 
 func TestParser_RecipeDefinition(t *testing.T) {
-	src := `recipe "log in as" (email, password)
+	src := `recipe "sign in as" (email, password)
   open the app
   tap "Sign In"
   type email into the "Email" field
@@ -219,7 +219,7 @@ func TestParser_RecipeDefinition(t *testing.T) {
 		t.Fatalf("expected 1 recipe, got %d", len(prog.Recipes))
 	}
 	r := prog.Recipes[0]
-	if r.Name != "log in as" {
+	if r.Name != "sign in as" {
 		t.Errorf("recipe name: %q", r.Name)
 	}
 	if len(r.Params) != 2 {
@@ -1748,7 +1748,7 @@ func TestParser_FullRecipeFlow(t *testing.T) {
 	src := `use "recipes/login.probe"
 
 test "user can add item to cart"
-  log in as "shopper@test.com" with password "shop123"
+  sign in as "shopper@test.com" with password "shop123"
   tap "Products"
   tap the 1st "Add to Cart" button
   tap "View Cart"

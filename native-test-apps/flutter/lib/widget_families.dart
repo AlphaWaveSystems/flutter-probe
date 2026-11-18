@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
@@ -18,6 +19,8 @@ const widgetFamilies = <String>[
   'display',
   'lists',
   'dialogs',
+  'progress',
+  'layout',
   'gestures',
 ];
 
@@ -30,6 +33,8 @@ Widget? widgetFamilyScreen(String family) => switch (family) {
   'display' => const DisplayFamilyScreen(),
   'lists' => const ListsFamilyScreen(),
   'dialogs' => const DialogsFamilyScreen(),
+  'progress' => const ProgressFamilyScreen(),
+  'layout' => const LayoutFamilyScreen(),
   'gestures' => const GesturesFamilyScreen(),
   _ => null,
 };
@@ -54,6 +59,7 @@ class SelectionFamilyScreen extends StatefulWidget {
 }
 
 class _SelectionFamilyScreenState extends State<SelectionFamilyScreen> {
+  bool _bottomTerms = false;
   bool _terms = false;
   bool _notifications = false;
   bool _cupertino = false;
@@ -133,6 +139,22 @@ class _SelectionFamilyScreenState extends State<SelectionFamilyScreen> {
             'wf_cupertino_switch_state',
             'Cupertino switch: ${_cupertino ? 'on' : 'off'}',
           ),
+          // A screen height plus 600 dp of space: the list builds only what is within 250 dp of the screen, so the widget below is not built on any screen size, and a
+          // test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
+          SizedBox(height: MediaQuery.sizeOf(context).height + 600),
+          _s(
+            'wf_bottom_checkbox',
+            (k) => CheckboxListTile(
+              key: k,
+              title: const Text('Bottom terms'),
+              value: _bottomTerms,
+              onChanged: (v) => setState(() => _bottomTerms = v ?? false),
+            ),
+          ),
+          _state(
+            'wf_bottom_terms_state',
+            'Lower terms: ${_bottomTerms ? 'on' : 'off'}',
+          ),
         ],
       ),
     );
@@ -150,6 +172,7 @@ class TextInputFamilyScreen extends StatefulWidget {
 }
 
 class _TextInputFamilyScreenState extends State<TextInputFamilyScreen> {
+  String _bottomText = '';
   final _formKey = GlobalKey<FormState>();
   String _plain = '';
   String _form = '';
@@ -246,6 +269,21 @@ class _TextInputFamilyScreenState extends State<TextInputFamilyScreen> {
             'wf_cupertino_state',
             'Cupertino: ${_cupertino.isEmpty ? '(empty)' : _cupertino}',
           ),
+          // A screen height plus 600 dp of space: the list builds only what is within 250 dp of the screen, so the widget below is not built on any screen size, and a
+          // test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
+          SizedBox(height: MediaQuery.sizeOf(context).height + 600),
+          _s(
+            'wf_bottom_field',
+            (k) => TextField(
+              key: k,
+              decoration: const InputDecoration(hintText: 'Bottom field'),
+              onChanged: (v) => setState(() => _bottomText = v),
+            ),
+          ),
+          _state(
+            'wf_bottom_field_state',
+            'Lower field: ${_bottomText.isEmpty ? '(empty)' : _bottomText}',
+          ),
         ],
       ),
     );
@@ -262,6 +300,7 @@ class ButtonsFamilyScreen extends StatefulWidget {
 }
 
 class _ButtonsFamilyScreenState extends State<ButtonsFamilyScreen> {
+  int _bottomTaps = 0;
   final _counts = <String, int>{
     'elevated': 0,
     'filled': 0,
@@ -383,6 +422,19 @@ class _ButtonsFamilyScreenState extends State<ButtonsFamilyScreen> {
             'Hold: tap ${_counts['tap']}, long ${_counts['long']}',
           ),
           const SizedBox(height: 80),
+          // A screen height plus 600 dp of space: the list builds only what is within 250 dp of the screen, so the widget below is not built on any screen size, and a
+          // test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
+          SizedBox(height: MediaQuery.sizeOf(context).height + 600),
+          _s(
+            'wf_bottom_button',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: () => setState(() => _bottomTaps++),
+              child: const Text('Bottom button'),
+            ),
+          ),
+          _state('wf_bottom_button_state', 'Lower taps: $_bottomTaps'),
+          const SizedBox(height: 80),
         ],
       ),
     );
@@ -439,6 +491,27 @@ class _NavigationFamilyScreenState extends State<NavigationFamilyScreen> {
                 ),
               ),
               child: const Text('Open message'),
+            ),
+          ),
+          // A screen height plus 600 dp of space: the list builds only what is within 250 dp of the screen, so the widget below is not built on any screen size, and a
+          // test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
+          SizedBox(height: MediaQuery.sizeOf(context).height + 600),
+          _s(
+            'wf_open_bottom_message',
+            (k) => ElevatedButton(
+              key: k,
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(title: const Text('Bottom message')),
+                    body: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: _state('wf_bottom_message_body', 'From: Grace'),
+                    ),
+                  ),
+                ),
+              ),
+              child: const Text('Open bottom message'),
             ),
           ),
         ],
@@ -547,6 +620,13 @@ class _DisplayFamilyScreenState extends State<DisplayFamilyScreen> {
             ],
           ),
           _state('wf_logo_taps', 'Taps: $_logoTaps'),
+          // A screen height plus 600 dp of space: the list builds only what is within 250 dp of the screen, so the widget below is not built on any screen size, and a
+          // test scrolls to it (docs/compat/MATRIX.md, the scroll cell).
+          SizedBox(height: MediaQuery.sizeOf(context).height + 600),
+          _s(
+            'wf_bottom_text',
+            (k) => Text('Bottom text: end of the list', key: k),
+          ),
         ],
       ),
     );
@@ -1198,6 +1278,168 @@ class _CoverPageState extends State<_CoverPage> {
                 child: const Text('Open tall dialog'),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Progress (docs/compat/NEXT.md, item 6): waiting for a spinner to go away. "Load" shows an indeterminate `CircularProgressIndicator`
+/// (`wf_spinner`) for 3 seconds, then the text "Loaded". "Load forever" shows one (`wf_forever`) that never goes away. A
+/// `LinearProgressIndicator` with a value of 0.4 (`wf_linear`) is always shown. State text: `Status: idle|loading|loaded|loading forever`.
+class ProgressFamilyScreen extends StatefulWidget {
+  const ProgressFamilyScreen({super.key});
+
+  @override
+  State<ProgressFamilyScreen> createState() => _ProgressFamilyScreenState();
+}
+
+class _ProgressFamilyScreenState extends State<ProgressFamilyScreen> {
+  String _status = 'idle';
+  Timer? _timer;
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _load() {
+    setState(() => _status = 'loading');
+    _timer?.cancel();
+    _timer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _status = 'loaded');
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Progress')),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          Row(
+            children: [
+              _s(
+                'wf_load',
+                (k) => ElevatedButton(
+                  key: k,
+                  onPressed: _load,
+                  child: const Text('Load'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _s(
+                'wf_load_forever',
+                (k) => ElevatedButton(
+                  key: k,
+                  onPressed: () => setState(() => _status = 'loading forever'),
+                  child: const Text('Load forever'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_status == 'loading')
+            _s('wf_spinner', (k) => CircularProgressIndicator(key: k)),
+          if (_status == 'loading forever')
+            _s('wf_forever', (k) => CircularProgressIndicator(key: k)),
+          if (_status == 'loaded')
+            _s('wf_loaded', (k) => Text('Loaded', key: k)),
+          const SizedBox(height: 12),
+          _s('wf_linear', (k) => LinearProgressIndicator(key: k, value: 0.4)),
+          _state('wf_progress_state', 'Status: $_status'),
+        ],
+      ),
+    );
+  }
+}
+
+/// Layout: widgets a person cannot see or cannot tap (docs/compat/NEXT.md, item 11). Each button counts its taps in a state text, so a
+/// test shows whether a tap arrived, not only that the step passed:
+/// - an `Opacity(opacity: 0)` button: painted transparent, still laid out and hit-tested (`Faded: N`)
+/// - a `Visibility(visible: false)` text kept in the tree (`maintainState`) and one removed from it, and an `Offstage` text
+/// - an `IgnorePointer` button (`Ignored: N`) and an `AbsorbPointer` button (`Absorbed: N`)
+/// - a button in a `Stack` fully covered by a `GestureDetector` that counts its own taps (`Covered: N`, `Cover: N`)
+class LayoutFamilyScreen extends StatefulWidget {
+  const LayoutFamilyScreen({super.key});
+
+  @override
+  State<LayoutFamilyScreen> createState() => _LayoutFamilyScreenState();
+}
+
+class _LayoutFamilyScreenState extends State<LayoutFamilyScreen> {
+  final _taps = <String, int>{};
+
+  void _count(String name) =>
+      setState(() => _taps[name] = (_taps[name] ?? 0) + 1);
+
+  Widget _button(String id, String label, String name) => _s(
+    id,
+    (k) => ElevatedButton(
+      key: k,
+      onPressed: () => _count(name),
+      child: Text(label),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    String n(String name) => '${_taps[name] ?? 0}';
+    return Scaffold(
+      appBar: AppBar(title: const Text('Layout')),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          Opacity(
+            opacity: 0,
+            child: _button('wf_faded', 'Faded button', 'faded'),
+          ),
+          Visibility(
+            visible: false,
+            maintainState: true,
+            child: _s('wf_kept', (k) => Text('Kept hidden', key: k)),
+          ),
+          Visibility(
+            visible: false,
+            child: _s('wf_gone', (k) => Text('Gone text', key: k)),
+          ),
+          Offstage(
+            child: _s('wf_offstage', (k) => Text('Offstage text', key: k)),
+          ),
+          IgnorePointer(
+            child: _button('wf_ignored', 'Ignored button', 'ignored'),
+          ),
+          AbsorbPointer(
+            child: _button('wf_absorbed', 'Absorbed button', 'absorbed'),
+          ),
+          SizedBox(
+            height: 56,
+            child: Stack(
+              children: [
+                _button('wf_covered', 'Covered button', 'covered'),
+                Positioned.fill(
+                  child: _s(
+                    'wf_cover',
+                    (k) => GestureDetector(
+                      key: k,
+                      onTap: () => _count('cover'),
+                      child: Container(
+                        color: Colors.blueGrey,
+                        alignment: Alignment.center,
+                        child: const Text('Cover'),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _state(
+            'wf_layout_state',
+            'Faded: ${n('faded')}, Ignored: ${n('ignored')}, Absorbed: ${n('absorbed')}, Covered: ${n('covered')}, Cover: ${n('cover')}',
           ),
         ],
       ),

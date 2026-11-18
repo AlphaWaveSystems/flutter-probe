@@ -99,6 +99,11 @@
     "body": "double tap \"${1:Item}\" optional",
     "description": "Attempt a double tap; continue if not found"
   },
+  "drag": {
+    "prefix": "drag #source to #target",
+    "body": "drag #${1:source} to #${2:target}",
+    "description": "Drag one widget to another"
+  },
   "l10n \"key\"": {
     "prefix": "tap l10n \"saveButton\"",
     "body": "tap l10n \"${1:saveButton}\"",
@@ -174,6 +179,11 @@
     "body": "see \"${1:Submit}\" is disabled",
     "description": "Assert widget is disabled"
   },
+  "see empty": {
+    "prefix": "see #password is empty",
+    "body": "see #${1:password} is empty",
+    "description": "Assert that a text field holds no character. Same rules as is filled; it cannot be combined with matching"
+  },
   "see enabled": {
     "prefix": "see \"Submit\" is enabled",
     "body": "see \"${1:Submit}\" is enabled",
@@ -188,6 +198,11 @@
     "prefix": "see exactly 2 requests GET \"/api/orders\"",
     "body": "see exactly ${1:2} requests GET \"${2:/api/orders}\"",
     "description": "Count the requests the app made"
+  },
+  "see filled": {
+    "prefix": "see #password is filled",
+    "body": "see #${1:password} is filled",
+    "description": "Assert that a text field holds at least one character (spaces count). It never reads the text, so it also works on a password field; name the field by its #id (a label, a button or a container with several fields is refused: \"not a text field\"). don't see #password is filled asserts it is empty. Needs a probe_agent that reports see_filled"
   },
   "see focused": {
     "prefix": "see \"Email\" is focused",

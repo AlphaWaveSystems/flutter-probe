@@ -1,0 +1,25 @@
+# The negative variants of probe-tests/widgets/progress.probe: every test below asserts something WRONG, and every one must FAIL.
+# They show that the positive suite can fail, and why. This file does not end in .probe, so `probe test` never picks it up in a directory run. To run it:
+#
+#   cp probe-tests/negative/progress.probe.expect-fail /tmp/progress-negative.probe
+#   probe test /tmp/progress-negative.probe --device <serial> -y       # (the progress build, the same probe.yaml as for progress.probe)
+#
+# Expected: 0 passed, 3 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+
+before each test
+  restart the app
+  wait until #wf_progress_state appears
+
+# Expected: see "Loaded": Expected to see "text("Loaded")" but it was not found (the spinner runs for 3 seconds first)
+test "N1 the result straight after the tap"
+  tap #wf_load
+  see "Loaded"
+
+# Expected: wait until #wf_forever disappears: a timeout after 5 seconds (the spinner never goes away)
+test "N2 a spinner that never goes away"
+  tap #wf_load_forever
+  wait until #wf_forever disappears within 5 seconds
+
+# Expected: see #wf_spinner: Expected to see "#wf_spinner" but it was not found (no spinner before the tap)
+test "N3 a spinner before anything was loaded"
+  see #wf_spinner

@@ -1,0 +1,43 @@
+# The negative variants of probe-tests/widgets/layout.probe: every test below asserts something WRONG, and every one must FAIL.
+# They show that the positive suite can fail, and why. This file does not end in .probe, so `probe test` never picks it up in a directory run. To run it:
+#
+#   cp probe-tests/negative/layout.probe.expect-fail /tmp/layout-negative.probe
+#   probe test /tmp/layout-negative.probe --device <serial> -y       # (the layout build, the same probe.yaml as for layout.probe)
+#
+# Expected: 0 passed, 7 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+
+before each test
+  restart the app
+  wait until #wf_layout_state appears
+
+# Expected: see "Kept hidden": Expected to see "text("Kept hidden")" but it was not found (Visibility(visible: false) hides it, kept in the tree or not)
+test "N1 a hidden widget kept in the tree is seen"
+  see "Kept hidden"
+
+# Expected: see "Offstage text": Expected to see "text("Offstage text")" but it was not found
+test "N2 an Offstage widget is seen"
+  see "Offstage text"
+
+# Expected: tap "Gone text": Widget not found
+test "N3 a widget removed by Visibility is tapped"
+  tap "Gone text"
+
+# Expected: see "Ignored: 1": Expected to see "text("Ignored: 1")" but it was not found (the IgnorePointer button got no tap)
+test "N4 the IgnorePointer button counted a tap"
+  tap "Ignored button"
+  see "Ignored: 1"
+
+# Expected: see "Absorbed: 1": Expected to see "text("Absorbed: 1")" but it was not found
+test "N5 the AbsorbPointer button counted a tap"
+  tap "Absorbed button"
+  see "Absorbed: 1"
+
+# Expected: see "Covered: 1": Expected to see "text("Covered: 1")" but it was not found (the cover on top got the tap)
+test "N6 the covered button counted a tap"
+  tap "Covered button"
+  see "Covered: 1"
+
+# Expected: see "Faded: 0": Expected to see "text("Faded: 0")" but it was not found (the transparent button was pressed)
+test "N7 the Opacity(0) button got no tap"
+  tap "Faded button"
+  see "Faded: 0"

@@ -143,8 +143,10 @@ export const PROBESCRIPT_KEYWORDS: readonly string[] = [
   "see cpu below",
   "see data transferred below",
   "see disabled",
+  "see empty",
   "see enabled",
   "see exactly",
+  "see filled",
   "see focused",
   "see matching",
   "see memory below",
@@ -252,7 +254,7 @@ export const PROBESCRIPT_COMMANDS: readonly { readonly label: string; readonly i
   { label: "double tap", insert: "double tap \"${1:Label}\"" },
   { label: "double tap if visible", insert: "double tap \"${1:Item}\" if visible" },
   { label: "double tap optional", insert: "double tap \"${1:Item}\" optional" },
-  { label: "drag", insert: "drag" },
+  { label: "drag", insert: "drag #${1:source} to #${2:target}" },
   { label: "dump tree", insert: "dump tree" },
   { label: "enroll biometric", insert: "enroll biometric" },
   { label: "go back", insert: "go back" },
@@ -306,9 +308,11 @@ export const PROBESCRIPT_COMMANDS: readonly { readonly label: string; readonly i
   { label: "see cpu below", insert: "see cpu below ${1:60} percent" },
   { label: "see data transferred below", insert: "see data transferred below ${1:500} KB" },
   { label: "see disabled", insert: "see \"${1:Submit}\" is disabled" },
+  { label: "see empty", insert: "see #${1:password} is empty" },
   { label: "see enabled", insert: "see \"${1:Submit}\" is enabled" },
   { label: "see exactly", insert: "see exactly ${1:3} \"${2:Item}\"" },
   { label: "see exactly N requests", insert: "see exactly ${1:2} requests GET \"${2:/api/orders}\"" },
+  { label: "see filled", insert: "see #${1:password} is filled" },
   { label: "see focused", insert: "see \"${1:Email}\" is focused" },
   { label: "see matching", insert: "see \"${1:Email}\" matching \"${2:.*@.*}\"" },
   { label: "see memory below", insert: "see memory below ${1:300} MB" },
@@ -378,4 +382,4 @@ export const PROBESCRIPT_COMMANDS: readonly { readonly label: string; readonly i
   { label: "within", insert: "wait until \"${1:Done}\" appears within ${2:90} seconds" },
 ];
 
-export const SOURCE_SHA256 = "b1b2e860585642e88a2ad7abba3ed0665745865a5610a63071347ce2aa3d3798";
+export const SOURCE_SHA256 = "13e2ac7d2baaa7a3757d1bb209fee3f051fc943e6974c66dfb753a39f8076adf";

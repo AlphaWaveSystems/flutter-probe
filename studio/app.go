@@ -1367,7 +1367,7 @@ func (a *App) executeRun(runCtx context.Context, path string, sel runSelection, 
 		a.emit("run:result", rr)
 	})
 	r.OnStep(func(ev runner.StepEvent) {
-		rs := toRunStep(ev)
+		rs := toRunStep(ev, matchModeOf(conn))
 		a.track.step(rs)
 		a.emit("run:step", rs)
 	})
@@ -1414,7 +1414,7 @@ type RunStep struct {
 	Depth   int         `json:"depth"`
 }
 
-func toRunStep(ev runner.StepEvent) RunStep {
+func toRunStep(ev runner.StepEvent, matchMode string) RunStep {
 	rs := RunStep{
 		File:        ev.File,
 		Test:        ev.TestName,
@@ -1430,6 +1430,7 @@ func toRunStep(ev runner.StepEvent) RunStep {
 	}
 	if ev.Status == runner.StepFailed {
 		if t, ok := triageStep(ev.Description, ev.SelectorIsID, rs.Error, ev.Duration); ok {
+			withReplacement(&t, ev, matchMode)
 			rs.Triage = &t
 		}
 	}

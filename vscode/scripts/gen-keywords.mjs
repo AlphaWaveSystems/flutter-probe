@@ -114,15 +114,18 @@ function escapeSnippet(text) {
 }
 
 // exampleSnippet turns a documented example into a snippet: each quoted text and each number becomes a tab stop whose default is
-// the text (`see exactly 2 requests GET "/api/orders"` gives `see exactly ${1:2} requests ${2:GET} "${3:/api/orders}"`).
+// the text (`see exactly 2 requests GET "/api/orders"` gives `see exactly ${1:2} requests ${2:GET} "${3:/api/orders}"`). An `#id` selector
+// becomes a tab stop too, so `see #password is filled` gives `see #${1:password} is filled`, a complete step, not the bare command.
 export function exampleSnippet(example) {
   let stop = 0;
   let out = "";
   let last = 0;
-  for (const match of example.matchAll(/"([^"]*)"|\b\d+\b/g)) {
+  for (const match of example.matchAll(/"([^"]*)"|#([A-Za-z_][\w-]*)|\b\d+\b/g)) {
     out += escapeSnippet(example.slice(last, match.index));
     if (match[1] !== undefined) {
       out += `"\${${++stop}:${escapeSnippet(match[1])}}"`;
+    } else if (match[2] !== undefined) {
+      out += `#\${${++stop}:${escapeSnippet(match[2])}}`;
     } else {
       out += `\${${++stop}:${match[0]}}`;
     }

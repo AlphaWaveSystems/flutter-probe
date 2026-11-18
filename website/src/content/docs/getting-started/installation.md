@@ -25,7 +25,7 @@ brew install probe
 
 ### Option B — Pre-built binary (all platforms, good for CI)
 
-Each release ships three artifacts per OS / architecture: `probe` (CLI test runner, always required), `probe-mcp` (optional standalone MCP server for AI agents), and a Studio Beta Preview archive (optional desktop app). Download what you need from [GitHub Releases](https://github.com/AlphaWaveSystems/flutter-probe/releases/latest):
+Each release ships three artifacts per OS / architecture: `probe` (CLI test runner, always required), `probe-mcp` (optional standalone MCP server for AI agents), and a Studio Beta Preview archive (optional desktop app; the v0.27.0 release has none, see [Optional: Install Studio](#optional-install-studio)). Download what you need from [GitHub Releases](https://github.com/AlphaWaveSystems/flutter-probe/releases/latest):
 
 | Platform | CLI | MCP server |
 |---|---|---|
@@ -45,8 +45,8 @@ mv probe-mcp-darwin-arm64 /usr/local/bin/probe-mcp
 ### Option C — `go install` (requires Go 1.26.10+)
 
 ```bash
-go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest
-go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe-mcp@latest   # optional
+go install github.com/alphawavesystems/flutter-probe/cmd/probe@latest
+go install github.com/alphawavesystems/flutter-probe/cmd/probe-mcp@latest   # optional
 ```
 
 This is a good option for CI environments that already have Go set up.
@@ -59,7 +59,7 @@ probe version
 
 ## Optional: Install Studio
 
-[FlutterProbe Studio](/tools/studio/) is a cross-platform desktop app for visual test authoring with an embedded device view. Download the archive for your platform from the GitHub Release:
+[FlutterProbe Studio](/tools/studio/) is a cross-platform desktop app for visual test authoring with an embedded device view. Download the archive for your platform from the GitHub Release. **The v0.27.0 release has no Studio archive**; the newest ones are on [v0.26.1](https://github.com/AlphaWaveSystems/flutter-probe/releases/tag/v0.26.1).
 
 ```bash
 # macOS — extract the .app bundle and move to Applications
@@ -83,7 +83,7 @@ Before a stable release, pre-release builds named `vX.Y.Z-next.N` are published 
 # CLI via Homebrew (cannot be installed next to the stable "probe" formula)
 brew uninstall probe          # only if the stable formula is installed
 brew install AlphaWaveSystems/tap/probe@next
-probe version                 # prints e.g. 0.27.0-next.1
+probe version                 # prints the canary version, X.Y.Z-next.N
 
 # or download the binary from the pre-release page
 # https://github.com/AlphaWaveSystems/flutter-probe/releases (pick the vX.Y.Z-next.N entry)
@@ -98,7 +98,7 @@ dev_dependencies:
   flutter_probe_agent:
     git:
       url: https://github.com/AlphaWaveSystems/flutter-probe.git
-      ref: v0.27.0-next.1      # the canary tag
+      ref: vX.Y.Z-next.N       # the canary tag
       path: probe_agent
 ```
 
@@ -106,12 +106,20 @@ To go back to stable, `brew uninstall probe@next && brew install probe` and rest
 
 ## Step 2: Add the Agent to Your App
 
-Add `flutter_probe_agent` to your Flutter app's `pubspec.yaml`:
+Add `flutter_probe_agent` to your Flutter app as a dev dependency:
+
+```bash
+flutter pub add --dev flutter_probe_agent
+```
+
+This adds the newest version published on [pub.dev](https://pub.dev/packages/flutter_probe_agent) to your `pubspec.yaml`, for example:
 
 ```yaml
 dev_dependencies:
-  flutter_probe_agent: ^0.27.0
+  flutter_probe_agent: ^0.26.1
 ```
+
+The agent is versioned separately from the CLI, so the newest agent on pub.dev can be one release behind the newest CLI. See [Compatibility](/advanced/compatibility/) for what a CLI and an agent of different versions can do together.
 
 Initialize in your `main.dart`:
 
