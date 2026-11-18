@@ -27,7 +27,7 @@ test "user can log in"
 ## Get started
 
 ```bash
-brew tap AlphaWaveSystems/tap && brew install probe     # or a release binary, see Installation
+brew tap AlphaWaveSystems/tap && brew install AlphaWaveSystems/tap/probe     # or a release binary, see Installation
 # add flutter_probe_agent to your app, run it with --dart-define=PROBE_AGENT=true
 probe init && probe lint tests                          # scaffold and check the sample
 probe test tests/example.probe --device <id> -v         # <id> from: probe device list
@@ -87,7 +87,7 @@ The **ProbeAgent** is a Dart package you add to your Flutter app as a dev depend
 
 ```bash
 brew tap AlphaWaveSystems/tap
-brew install probe
+brew install AlphaWaveSystems/tap/probe
 # canary (pre-release) builds: brew install AlphaWaveSystems/tap/probe@next, see the installation docs
 ```
 
@@ -120,7 +120,7 @@ make build        # → bin/probe
 make install      # → $GOPATH/bin/probe (optional)
 ```
 
-**Requirements:** Go 1.26.10+, Dart 3.3+ / Flutter 3.19+ (tested up to 3.41), ADB (Android), Xcode (iOS)
+**Requirements:** Go 1.26.10+, Dart 3.3+ / Flutter 3.19+ (latest tested: 3.50.0), ADB (Android), Xcode (iOS)
 
 ### Physical iOS Devices
 
