@@ -41,7 +41,7 @@ var (
 	legalAttrHref    = regexp.MustCompile(`\bhref="([^"]*)"`)
 	legalAttrLang    = regexp.MustCompile(`\bhreflang="([^"]*)"`)
 	legalAttrSlug    = regexp.MustCompile(`'/[a-z-]+/'`)
-	legalSwitchedOff = regexp.MustCompile(`\b(?:false|null|undefined|0)\s*&&|&&\s*(?:false|null|undefined)\b|\?\s*(?:null|''|"")\s*:|<!--|\{/\*`)
+	legalSwitchedOff = regexp.MustCompile(`\{\s*\(?\s*(?:false|null|undefined|!1|!true|''|""|NaN)\s*\)?\s*(?:&&|\?)|\{\s*true\s*(?:\|\||\?\s*(?:null|undefined|''|"")\s*:)|&&\s*(?:false|null|undefined)\s*\}|<!--|\{/\*|<template\b|\shidden[\s=>]|display\s*:\s*none`)
 	legalBlocks      = regexp.MustCompile(`<(h2|li|p|ul)\b`)
 )
 
@@ -320,14 +320,15 @@ func TestLegalPagesKeepTheirRequiredClauses(t *testing.T) {
 	counted := map[string]map[string]int{
 		"terms":               {"at least 30 days before": 3, "PERIOD OF TWELVE MONTHS": 1, "IN THE TWELVE MONTHS BEFORE": 1, "within 60 days": 1},
 		"terminos":            {"con al menos 30 días de anticipación": 3, "PERIODO DE DOCE MESES": 1, "DOCE MESES ANTERIORES": 1, "dentro de los 60 días": 1, "prevalece la versión en español": 1},
-		"privacy":             {"15 business days": 2, "20 business days": 1, "the licence key we issue to the team": 1, "sets no cookies": 2, "has no analytics": 1, "when it verifies the run": 1},
-		"aviso-de-privacidad": {"15 días hábiles": 2, "20 días hábiles": 1, "la clave de licencia que emitimos al equipo": 1, "cuando verifica la ejecución": 1, "prevalece la versión en español": 1},
+		"privacy":             {"15 business days": 2, "20 business days": 1, "the licence key we issue to the team": 1, "sets no cookies": 2, "has no analytics": 1, "when it verifies the run": 1, "From a valid token we may keep": 1, "and never writes it to storage": 1},
+		"aviso-de-privacidad": {"15 días hábiles": 2, "20 días hábiles": 1, "la clave de licencia que emitimos al equipo": 1, "cuando verifica la ejecución": 1, "De un token válido podemos conservar": 1, "y nunca la escribe en almacenamiento": 1, "no instala cookies": 2, "no tiene analítica": 1, "prevalece la versión en español": 1},
 		"refunds":             {"within 60 days": 1, "a dispute that covers the current period is open": 1, "for reasons attributable to us": 1, "we refund or credit what the law requires": 1, "we refund the difference": 1, "we refund the part of the period that was not provided": 1},
 		"reembolsos":          {"dentro de los 60 días": 1, "una aclaración que abarque el periodo en curso": 1, "por causas imputables a nosotros": 1, "reembolsamos o bonificamos lo que la ley exija": 1, "reembolsamos la diferencia": 1, "reembolsamos la parte del periodo que no se prestó": 1, "prevalece la versión en español": 1},
 	}
 	for page, want := range counted {
 		src := readSite(t, "src/pages/"+page+".astro")
-		// A counted clause still counts when the line is commented out or switched off, so no legal page may do either.
+		// A counted clause still counts when the line is commented out or switched off, so no legal page may use the plain ways of doing either
+		// (a pattern cannot see every way: a condition held in a variable passes, and the review of the page is what catches it).
 		if m := legalSwitchedOff.FindString(src); m != "" {
 			t.Errorf("%s.astro contains %q: a clause is printed or removed, not switched off", page, m)
 		}
@@ -446,8 +447,37 @@ func TestBuiltSiteCheckRefusesLoadsFromAnotherHost(t *testing.T) {
 	for _, c := range []struct {
 		name, file, body, want string
 	}{
-		{"a page of the site", "index.html", `<link rel="canonical" href="https://flutterprobe.dev/"><link rel="alternate" hreflang="es" href="https://flutterprobe.dev/terminos/"><link rel="stylesheet" href="/_astro/a.css"><script type="module" src="/_astro/b.js"></script><a href="https://github.com/AlphaWaveSystems/flutter-probe">GitHub</a><img src="/report.png" alt=""><svg xmlns="http://www.w3.org/2000/svg"></svg><script>fetch("/pagefind/x.json")</script>`, ""},
+		{"a page of the site", "index.html", `<link rel="me" href="https://github.com/AlphaWaveSystems"><script type="application/ld+json">{"@context":"https://schema.org","import":"x","url":"https://github.com/AlphaWaveSystems/flutter-probe"}</script><div data-href="https://example.org/x" data-src="//example.org/y"></div><svg><use href="#a"/></svg><script>new URL(c,new URL(d||"/","https://p")).pathname</script><pre><code>&lt;script src="https://cdn.example.com/a.js"&gt;</code></pre><link rel="canonical" href="https://flutterprobe.dev/"><link rel="alternate" hreflang="es" href="https://flutterprobe.dev/terminos/"><link rel="stylesheet" href="/_astro/a.css"><script type="module" src="/_astro/b.js"></script><a href="https://github.com/AlphaWaveSystems/flutter-probe">GitHub</a><img src="/report.png" alt=""><svg xmlns="http://www.w3.org/2000/svg"></svg><script>fetch("/pagefind/x.json")</script>`, ""},
 		{"an own-host image", "index.html", `<img src="https://flutterprobe.dev/og-image.svg">`, ""},
+		{"an alternate stylesheet", "index.html", `<link rel="alternate stylesheet" title="x" href="https://evil.example/alt.css">`, "evil.example"},
+		{"a stylesheet that is also alternate", "index.html", `<link href="https://evil.example/alt.css" rel="stylesheet alternate">`, "evil.example"},
+		{"a link with no rel", "index.html", `<link href="https://evil.example/x">`, "evil.example"},
+		{"a canonical link elsewhere is not a load", "index.html", `<link rel="canonical" href="https://example.org/"><link rel="alternate" hreflang="es" href="https://example.org/es/">`, ""},
+		{"an image after an attribute with >", "docs/index.html", `<img alt="c > d" src="https://img.example.com/x.png">`, "img.example.com"},
+		{"an image set from a script", "index.html", `<script>new Image().src="https://stats.example.com/p.gif"</script>`, "stats.example.com"},
+		{"a script built by a script", "index.html", `<script>const s=document.createElement("script");s.src='//cdn.example.com/t.js';document.head.append(s)</script>`, "cdn.example.com"},
+		{"a request opened by a script", "index.html", "<script>const u=`https://stats.example.com/x`;const r=new XMLHttpRequest();r.open('GET',u)</script>", "stats.example.com"},
+		{"a script file", "_astro/b.js", `export const hit=()=>fetch("https://stats.example.com/hit")`, "stats.example.com"},
+		{"a script file with a namespace and a credit comment", "_astro/b.js", `/* https://github.com/withastro/starlight */ document.createElementNS("http://www.w3.org/2000/svg","svg")`, ""},
+		{"a cookie added to", "index.html", `<script>document.cookie += "seen=1"</script>`, "writes a cookie"},
+		{"a cookie by index", "index.html", `<script>document["cookie"] = "seen=1"</script>`, "writes a cookie"},
+		{"a cookie through another name", "_astro/b.js", `const d=document;d.cookie="seen=1"`, "writes a cookie"},
+		{"a cookie that is only read", "index.html", `<script>const c = document.cookie; if (document.cookie === "") {}</script>`, ""},
+		{"a lookalike host", "index.html", `<img src="https://flutterprobe.dev.evil.example/x.png">`, "evil.example"},
+		{"an upper-case scheme", "index.html", `<img src="HTTPS://img.example.com/x.png">`, "img.example.com"},
+		{"an encoded address", "index.html", `<img src="https:&#x2F;&#x2F;img.example.com/x.png">`, "img.example.com"},
+		{"a refresh", "index.html", `<meta http-equiv="refresh" content="0;url=https://evil.example/">`, "evil.example"},
+		{"a description that names an address", "index.html", `<meta name="description" content="See https://github.com/x">`, ""},
+		{"a ping", "index.html", `<a href="/x" ping="https://stats.example.com/p">x</a>`, "stats.example.com"},
+		{"a form", "index.html", `<form action="https://forms.example.com/s"></form>`, "forms.example.com"},
+		{"a base", "index.html", `<base href="https://evil.example/">`, "evil.example"},
+		{"a body background", "index.html", `<body background="https://img.example.com/b.png">`, "img.example.com"},
+		{"a preload set", "index.html", `<link rel="preload" as="image" imagesrcset="https://img.example.com/a.png 1x">`, "img.example.com"},
+		{"a filter image", "index.html", `<svg><feImage href="https://img.example.com/f.png"/></svg>`, "img.example.com"},
+		{"a single-quoted style", "index.html", `<div style='background:url(https://img.example.com/bg.png)'></div>`, "img.example.com"},
+		{"the second image of a set", "_astro/a.css", `a{background:image-set("/a.png" 1x, "https://img.example.com/i.png" 2x)}`, "img.example.com"},
+		{"an escaped stylesheet address", "_astro/a.css", `a{background:url(https\:\/\/img.example.com/i.png)}`, "img.example.com"},
+		{"an inline image in a stylesheet", "_astro/a.css", `a{background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E")}`, ""},
 		{"a fonts stylesheet", "index.html", `<link href="https://fonts.googleapis.com/css2?family=X" rel="stylesheet">`, "fonts.googleapis.com"},
 		{"a preconnect", "docs/index.html", `<link rel=preconnect href=https://fonts.gstatic.com crossorigin>`, "fonts.gstatic.com"},
 		{"a script", "index.html", `<script async src="//cdn.example.com/a.js"></script>`, "cdn.example.com"},
