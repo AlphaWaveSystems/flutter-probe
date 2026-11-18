@@ -6,7 +6,7 @@ description: Install the probe CLI and integrate the Dart agent into your Flutte
 **In a hurry?** On macOS or Linux with Flutter installed:
 
 ```bash
-brew tap AlphaWaveSystems/tap && brew install probe     # 1. the CLI
+brew tap AlphaWaveSystems/tap && brew install AlphaWaveSystems/tap/probe     # 1. the CLI
 # 2. add flutter_probe_agent to your app (Step 2 below) and run it with --dart-define=PROBE_AGENT=true
 probe init && probe lint tests                          # 3. scaffold and check the sample
 probe test tests/example.probe --device <id> -v         # 4. <id> from: probe device list
@@ -20,8 +20,10 @@ The steps below explain each part, and the [login test tutorial](/tutorials/flut
 
 ```bash
 brew tap AlphaWaveSystems/tap
-brew install probe
+brew install AlphaWaveSystems/tap/probe
 ```
+
+The install line names the tap in full on purpose: Homebrew's [tap documentation](https://docs.brew.sh/Taps) says that tapping a repository does not trust the whole tap and recommends installing the fully qualified `user/repository/formula`, which also works on a machine that has not tapped it yet.
 
 ### Option B — Pre-built binary (all platforms, good for CI)
 
@@ -102,14 +104,14 @@ dev_dependencies:
       path: probe_agent
 ```
 
-To go back to stable, `brew uninstall probe@next && brew install probe` and restore the pub.dev version constraint. See [Compatibility](/advanced/compatibility/) for what a CLI and agent of different versions can do together.
+To go back to stable, `brew uninstall probe@next && brew install AlphaWaveSystems/tap/probe` and restore the pub.dev version constraint. See [Compatibility](/advanced/compatibility/) for what a CLI and agent of different versions can do together.
 
 ## Step 2: Add the Agent to Your App
 
 Add `flutter_probe_agent` to your Flutter app as a dev dependency:
 
 ```bash
-flutter pub add --dev flutter_probe_agent
+flutter pub add dev:flutter_probe_agent
 ```
 
 This adds the newest version published on [pub.dev](https://pub.dev/packages/flutter_probe_agent) to your `pubspec.yaml`, for example:

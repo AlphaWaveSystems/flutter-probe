@@ -7,7 +7,7 @@
 | Tool | Version | Purpose | Install |
 |---|---|---|---|
 | Go | 1.26+ | Build the CLI | [go.dev](https://go.dev/dl/) |
-| Flutter | 3.19+ (tested up to 3.41) | Build apps with ProbeAgent | [flutter.dev](https://flutter.dev/docs/get-started/install) |
+| Flutter | 3.19+ (latest tested: 3.50.0) | Build apps with ProbeAgent | [flutter.dev](https://flutter.dev/docs/get-started/install) |
 | Dart | 3.3+ | Included with Flutter | — |
 
 ### Platform-Specific
