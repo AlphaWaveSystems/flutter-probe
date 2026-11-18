@@ -21,34 +21,38 @@ no device):
 
 ## Facts about the packages
 
-These are from the package pages and the Flutter docs, read on 2026-11-17. The quotes from the migration guide come from a summary of the
-page: check them against the live page before relying on them.
+These are from the package pages (the pub.dev API) and the Flutter docs, read on 2026-11-17 and 2026-11-18. The migration guide was read in full
+on 2026-11-18 (the page says it was last updated on 2026-11-09 and reflects Flutter 3.50).
 
-- `material_ui` 1.11.1 and `cupertino_ui` 1.1.7 are the latest versions. Both have a minimum Dart SDK of 3.13 (pub.dev, "Versions"). No
-  minimum Flutter version is stated on those pages.
+- `material_ui` 1.11.1 and `cupertino_ui` 1.1.7 are the latest versions (both published 2026-11-16). Both declare `environment: sdk ^3.13.0`
+  and `flutter >=3.47.0` (the pub.dev API, `pubspec.environment` of the latest version, read 2026-11-18). The first versions, 0.0.1
+  (2026-02-18), declared `flutter >=3.35.0`. The migration guide itself states no minimum version.
 - The classes are **new types copied from the framework**, not re-exports: "values from `package:flutter/material.dart` cannot be assigned
   to parameters expecting types from `package:material_ui`" (migration guide). In the API docs, `material_ui`'s `ElevatedButton` extends
   `material_ui`'s own `ButtonStyleButton`. The widgets-layer classes (`Widget`, `Text`, `Semantics`, `GestureDetector`, `EditableText`) are
   the framework's.
 - Timeline (migration guide): contributions to the in-framework libraries were frozen in 3.44, the packages could be adopted from 3.47, and
   the in-framework libraries are formally deprecated in 3.50. **No removal version is stated.**
-- An app can mix both libraries, through `MaterialUiCompatibilityBridge` and `CupertinoUiCompatibilityBridge` (themes and localizations).
-  The bridges are themselves deprecated ("a temporary migration utility").
+- An app can mix both libraries through `MaterialUiCompatibilityBridge`, which the guide describes: it injects theme and localization data
+  downward, and it cannot resolve type mismatches when a dependency's public API uses in-framework types. The guide names no Cupertino bridge
+  class (it says `material_ui` and `cupertino_ui` "provide compatibility bridge utilities"), and it does not call the bridge deprecated or
+  temporary.
 - Package authors are told to treat the migration as a major version bump. Testing tools are not mentioned.
 - The agent today declares `flutter: ">=3.19.0"` and `sdk: ">=3.3.0 <4.0.0"` (`probe_agent/pubspec.yaml`). Its CI runs Flutter 3.29.x.
 
 ## Where the agent names a design-library class
 
-Every `is`/`is!` test on a class of `material.dart` or `cupertino.dart` in `probe_agent/lib/src` (line numbers on main at the time of
-writing):
+Every `is`/`is!` test on a class of `material.dart` or `cupertino.dart` in `probe_agent/lib/src` (line numbers are at main `75e89a41`, read on
+2026-11-18; they drift with every agent change, so the symbol names are the stable reference):
 
 | Class | Where | What it decides | On a `material_ui` app |
 |---|---|---|---|
-| `ButtonStyleButton`, `IconButton`, `FloatingActionButton`, `TextField`, `Switch`, `Checkbox` | `executor.dart` `_controlDisabled` (2132-2137) | `is enabled` / `is disabled` | **read as enabled (false pass)**; refused since #855 |
-| `Switch`, `Checkbox`, `Radio`, the three list tiles, `FilterChip`, `ChoiceChip`, `CupertinoSwitch`, `CupertinoRadio` | `executor.dart` `_checkedState` (2025-2037), the message at 1310 | `is checked` | "not a checkable control"; refused since #855 |
-| `Scaffold`, `Dialog`, `BottomSheet`, `CupertinoPageScaffold` | `executor.dart` `_routeTransitionInFlight` (1406) | wait for a route transition before a tap (FP-13) | **not measured.** Expected: no route body is recognised, so the wait never happens. A tap right after a dialog closes can land on its barrier: a flaky failure, or a tap that does nothing (a silent risk) |
-| `InkResponse` | `executor.dart` `_findDirectTapTarget` (716, 735) | direct `onTap` on a matched `Semantics` wrapper | falls back to a real pointer tap, which works (#852: `tap "Submit"` worked) |
-| `Tooltip` | `finder.dart` (252), `executor.dart` `_textOf` (2163) | the tooltip fallback of a text selector, and its read (#818) | **found nothing** (#852) |
+| `ButtonStyleButton`, `IconButton`, `FloatingActionButton`, `TextField`, `Switch`, `Checkbox` | `executor.dart` `_controlDisabled` (2294-2300) | `is enabled` / `is disabled` | **read as enabled (false pass)**; refused since #855 |
+| `Switch`, `Checkbox`, `Radio`, the three list tiles, `FilterChip`, `ChoiceChip`, `CupertinoSwitch`, `CupertinoRadio` | `executor.dart` `_checkedState` (2065-2104), the message at 1348 | `is checked` | "not a checkable control"; refused since #855 |
+| `Scaffold`, `Dialog`, `BottomSheet`, `CupertinoPageScaffold` | `executor.dart` `_routeTransitionInFlight` (1438) | wait for a route transition before a tap (FP-13) | **not measured.** Expected: no route body is recognised, so the wait never happens. A tap right after a dialog closes can land on its barrier: a flaky failure, or a tap that does nothing (a silent risk) |
+| `InkResponse` | `executor.dart` `_findDirectTapTarget` (710; the `InkResponse` tests at 720 and 739) | direct `onTap` on a matched `Semantics` wrapper | falls back to a real pointer tap, which works (#852: `tap "Submit"` worked) |
+| `Tooltip` | `finder.dart` (252), `executor.dart` `_textOf` (2308; the `Tooltip` test at 2326) | the tooltip fallback of a text selector, and its read (#818) | **found nothing** (#852) |
+| the names of the controls the agent reads, with the framework type test for each | `executor.dart` `_enabledReadNames` (2233), `_checkedReadNames` (2244), `_isLookalike`, `_lookalikeBelow`, `_refuseUnreadControl` (the #855 stopgap) | recognises a control of the same name that is not the framework class, to refuse instead of answering | exists so that a `material_ui` control is refused; it must be kept in step with whatever option is chosen |
 | `TextField`, `CupertinoTextField` (`FormField` is widgets) | `finder.dart` `_fieldKeyOf` (107) | the key of a field around a match | not measured. `FormField` still covers `TextFormField` |
 | `ButtonStyleButton`, `IconButton`, `FloatingActionButton`, `CupertinoButton`, `Checkbox`, `Radio`, `Switch`, `CupertinoSwitch`, `InkResponse`, `Tooltip` | `device_view.dart` `_isInteractive` (215-252) | which widgets `probe device view` and Studio's inspector mark as interactive | not measured. Expected: these controls are not marked |
 
@@ -69,8 +73,7 @@ widgets-layer classes and are unaffected.
 
 `is enabled`, `is disabled` and `is checked` look, on the target and its ancestors up to 40, for a **lookalike**: a widget whose runtime
 type name (type arguments dropped) is the name of a control the agent reads, but which is not that framework class (each name is paired
-with the framework type test). On a lookalike, the step throws "cannot be evaluated", negated steps too. probe-admin reran #852's test on
-#855: the false pass is closed and the framework controls are unchanged.
+with the framework type test). On a lookalike, the step throws "cannot be evaluated", negated steps too. #852's test was rerun against #855: the false pass is closed and the framework controls are unchanged.
 
 Its limits:
 
@@ -88,8 +91,9 @@ Its limits:
 The agent depends on `material_ui` and `cupertino_ui` and tests both classes.
 
 - Dart has no import that depends on the Flutter version, so the dependency is unconditional. That raises the agent's floor to what the
-  packages need: Dart 3.13 (stated), and in practice Flutter 3.47 or later (the packages' first stable home; not stated as a constraint on
-  pub.dev). The floor today is Flutter 3.19.
+  packages need: Dart 3.13 and Flutter 3.47, both declared by the latest versions of the packages (`environment` on pub.dev; see the facts above).
+  Which older package versions an agent could still allow, and what that would do to the floor, is not examined here. The floor today is
+  Flutter 3.19.
 - Every app that adds the agent then also resolves `material_ui` and `cupertino_ui`, even if it does not use them: a larger dependency
   graph, and version conflicts when an app pins another version.
 - **Cost to users:** apps on Flutter 3.19 to 3.46 can no longer take a new agent. How many there are is unknown: the agent sends no
@@ -111,7 +115,7 @@ Material and Cupertino controls describe their state to accessibility tools thro
 and `SemanticsProperties` are widgets-layer classes, so they are the same in both families. The properties are on the widget, so the
 **semantics tree does not need to be enabled**.
 
-Measured on the framework controls (Flutter 3.44.8, a widget test that walks each control's subtree for `Semantics` properties):
+Measured on the framework controls (Flutter 3.44.8, a widget test that walks each control's subtree for `Semantics` properties; **reported, not reproducible from this repository**: the test is not committed):
 
 | Control | Properties found |
 |---|---|
@@ -128,7 +132,7 @@ Measured on the framework controls (Flutter 3.44.8, a widget test that walks eac
 - No new dependency, no floor change, and no runtime type names, so it works under `--obfuscate`.
 - It reads what assistive technology reads, which is closer to what the person sees than a widget field.
 - **Measured on `material_ui` and `cupertino_ui` too.** The same walk on Flutter 3.50.0 with `material_ui` 1.11.1 and `cupertino_ui` 1.1.7
-  (a widget test on a scratch app, one pumped state per control, run by probe-admin) gives the same properties for every row of the table:
+  (a widget test on a scratch app, one pumped state per control) gives the same properties for every row of the table. **Reported, not reproducible from this repository:** the scratch app and its test are not committed, so this walk and the one above are measurements to repeat, not evidence to cite:
   `enabled` on the buttons, text fields and chips, `checked` on `Checkbox` and `Radio`, `toggled` on the switches, `selected` on the
   chips, `tooltip` on `Tooltip` and an `IconButton`'s tooltip, and the same gap, `CupertinoButton` with `button=true` and no enabled value.
   Not yet run: the agent reading these values, and any device.
@@ -163,8 +167,7 @@ unnecessary for enabled and checked, and can be removed once (1) to (3) land.
     rule);
   - mutants per rule.
 - **A scratch app on Flutter 3.50** with `material_ui` and `cupertino_ui`, in its own throwaway folder. Not the e2e-test-workspace: adding
-  packages there upgrades unrelated dependencies. The run uses probe-admin's private 3.50 SDK, coordinated with probe-admin, never while
-  they build. It reruns #852's measurement test and extends it to the rows #852 did not measure:
+  packages there upgrades unrelated dependencies. It reruns #852's measurement test and extends it to the rows #852 did not measure:
   - routes: a dialog, a sheet and a page transition followed by a tap;
   - `TextField(enabled: false)`, chips, list tiles, `TextFormField`, `DropdownButton`;
   - the tooltip selector;
