@@ -4,7 +4,7 @@
 #   cp probe-tests/negative/buttons.probe.expect-fail /tmp/buttons-negative.probe
 #   probe test /tmp/buttons-negative.probe --device <serial> -y       # (the buttons build, the same probe.yaml as for buttons.probe)
 #
-# Expected: 0 passed, 8 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+# Expected: 0 passed, 10 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
 # Each test must fail at its own step, with the message in its comment. A failure at the `wait until` of `before each test` (a timeout
 # waiting for the screen's last element) is NOT the expected failure: the screen never showed, and the run proves nothing.
 
@@ -51,3 +51,12 @@ test "N7 a tap is not a long press"
 test "N8 the tooltip of one button does not find another"
   tap "Compose"
   see "Icon button: 1"
+
+# Expected: tap "Bottom button": Widget not found: text("Bottom button") (the button is below the fold of a lazy list and not built before a scroll)
+test "N9 a button below the fold is not tapped without a scroll step"
+  tap "Bottom button"
+
+# Expected: see "Lower taps: 1": Expected to see "text("Lower taps: 1")" but it was not found (the button was scrolled to but not tapped)
+test "N10 the counter below the fold is not 1 before the tap"
+  scroll down until "Bottom button" appears
+  see "Lower taps: 1"

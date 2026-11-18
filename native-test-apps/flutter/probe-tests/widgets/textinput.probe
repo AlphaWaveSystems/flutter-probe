@@ -77,3 +77,12 @@ test "a form field, a multi-line field and a Cupertino field are fields too"
   type "hello" into #wf_cupertino_field
   see #wf_cupertino_field is filled
 
+# Below the fold: a space of a screen height plus 600 dp and then one widget. A ListView builds only the children near the viewport, so the widget is not in the tree until a scroll reaches it.
+test "a field below the fold: scroll to it, type into it, scroll back"
+  don't see #wf_bottom_field
+  scroll down until #wf_bottom_field appears
+  see #wf_bottom_field is empty
+  type "end" into #wf_bottom_field
+  see "Lower field: end"
+  see #wf_bottom_field is filled
+  scroll up until #wf_textfield appears

@@ -4,7 +4,7 @@
 #   cp probe-tests/negative/display.probe.expect-fail /tmp/display-negative.probe
 #   probe test /tmp/display-negative.probe --device <serial> -y       # (the display build, the same probe.yaml as for display.probe)
 #
-# Expected: 0 passed, 13 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+# Expected: 0 passed, 16 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
 
 before each test
   restart the app
@@ -64,3 +64,15 @@ test "N12 the tap on the logo did not arrive"
 # Expected: see "Logo": "text("Logo")" contains "Logo", not "Banner" (the image reads as its semantic label)
 test "N13 the image's semantic label read as another word"
   see "Logo" contains "Banner"
+
+# Expected: see "Bottom text": Expected to see "text("Bottom text")" but it was not found (the text is below the fold of a lazy list and not built before a scroll)
+test "N14 a text below the fold is not seen before a scroll"
+  see "Bottom text"
+
+# Expected: scroll down until "Nowhere" appears: scroll down until text("Nowhere"): not found after scrolling (it ends with that message, it does not run on)
+test "N15 scrolling down to a text that does not exist ends with a failure"
+  scroll down until "Nowhere" appears
+
+# Expected: scroll up until "Bottom text" appears: scroll up until text("Bottom text"): not found after scrolling (the text is below: `scroll up` reveals earlier content)
+test "N16 scrolling up does not reach a text below"
+  scroll up until "Bottom text" appears
