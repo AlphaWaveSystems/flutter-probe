@@ -14,12 +14,15 @@
 //     partner", "Apply by email"...) anywhere but the design-partner form (extra query parameters allowed) or the support address,
 //   - names a feature that is not built or an offer that waits for the legal review, as a claim (BANNED; a refund is named only next to
 //     the refund policy: a link to /refunds/ in its paragraph or <details> block, or a sentence that does nothing but point to the policy;
-//     "money-back" only in a plain "there is no money-back offer"; "upload" and "any CI" in one paragraph that does not say where
-//     uploads work ("GitHub Actions" with "only", "today" or "for now"), looks ahead ("next", "soon") or promises uploads in the clause
-//     of "any CI"),
+//     "money-back" only in a plain "there is no money-back offer" in its own clause; "upload" (or sending reports to the cloud) and
+//     "any CI" in one paragraph that has no sentence about uploads saying where they work ("GitHub Actions" with "only", "today" or
+//     "for now", no other CI named), or that has a sentence about uploads or a CI that looks ahead ("next", "soon", "on the way"),
+//     or that promises uploads in the clause of "any CI"),
 //   - has a structured-data Offer or AggregateOffer (JSON-LD, in the front matter or a script) with a price that is not an available
 //     plan's, or with none,
 //   - or claims a gate ("quality gate", "gate your pull requests", "release gating": not "gateway", "Gated", "Bill Gates").
+// This is a text guard: it catches the natural wordings of these claims (and is tested on the ones a review found), it is not a proof
+// that no page makes one. A claim in a wording nobody thought of can pass; the review of a page is still a person's.
 // Prices, results counts, cards and buy controls are read from prose only: code blocks and inline code are skipped (a shell's "$1" is not
 // a price). The other rules read code too.
 //
@@ -53,26 +56,36 @@ export const BANNED = [
   [/\b14[- ]?days?\b(?=[^.!?\n]{0,40}\b(?:refund|money|trial|guarantee)\b)/i, 'refund terms wait for the legal review'],
 ];
 // A gate as a claim about what the product does to pull requests, merges or releases. "Gated builds" (a CI term) is not one.
-const GATE = /\b(?:quality|merge|release|deploy(?:ment)?|ci|pr|build|hosted|commit)\s+gat(?:e|es|ing)\b|\bgat(?:e|es|ed|ing)\s+(?:(?:on|for|at|your|the|our|their|its|this|that|these|those|a|an|every|each|all|any|of|single|whole|entire|new|open|incoming|individual)\s+){0,4}(?:pull\s+requests?|prs?|merges?|deploys?|deployments?|releases?|commits?)\b/gi;
+const GATE = /\b(?:quality|merge|release|deploy(?:ment)?|ci|pr|build|hosted|commit)\s+gat(?:e|es|ing)\b|\bgat(?:e|es|ed|ing)\s+(?:(?:on|for|at|your|the|our|their|its|this|that|these|those|a|an|every|each|all|any|of|and|one|single|whole|entire|new|open|incoming|individual)\s+){0,4}(?:pull[-\s]+requests?|prs?|merges?|deploys?|deployments?|releases?|commits?)\b/gi;
 // The sentences of a text; norm is a sentence in lower case with its punctuation taken out.
 const sentencesOf = (t) => t.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean);
 const norm = (x) => x.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-const isQuestion = (x) => /\?$/.test(x.trim()) && x.trim().split(/\s+/).length <= 6;
 const REFUND_WORD = /(?<!\bnon-)\brefund(?:s|ed|able)?\b/gi;
 const REFUND_TEST = /(?<!\bnon-)\brefund(?:s|ed|able)?\b/i;
 // A sentence that only points to the refund policy, and nothing else.
 const POLICY_SENTENCE = /^(?:(?:the|our)\s+)?refund policy$|^(?:(?:refunds?|refund requests?|refund policy)\s+)?(?:see|read|refer to|are in|are described in|are covered by|are set out in|details in|details are in)\s+(?:our|the)\s+(?:refund\s+)?policy$/;
-// A plain statement that there is no money-back offer.
+// A plain statement that there is no money-back offer, tested on the clause of each "money-back" (the parts between a comma, ";", ":", a
+// dash, "and", "yet", "while", "whereas"), and never in a question or a sentence that goes on with "but", "though", "although",
+// "however", "except" or "unless" (CONTRAST: those words reject the whole sentence, so they need no split).
 const NO_MONEY_BACK = /\b(?:there\s+(?:is|are)\s+no|we\s+(?:have\s+no|do\s+not\s+(?:offer|have)|don't\s+(?:offer|have)|never\s+(?:offer|have))|no)\s+(?:a\s+|any\s+)?money[- ]back\b/i;
-// Words that look ahead: "today" with "GitLab next month" is a promise of another CI.
-const FORWARD = /\b(?:next|soon|coming|planned|will|later|upcoming|roadmap|beta)\b/i;
+const MONEY_BACK_SPLIT = /[,;:\u2014\u2013]|\b(?:and|yet|while|whereas)\b/gi;
+const CONTRAST = /\b(?:but|however|except|unless|although|though)\b/i;
+// Other CI systems, and the words that say GitHub Actions is not the only one.
+const OTHER_CI = /\b(?:GitLab|Jenkins|Circle ?CI|Bitbucket|Travis|Azure (?:DevOps|Pipelines)|Buildkite|TeamCity|Bamboo|Codemagic|Bitrise|Drone|Semaphore|Cirrus|Gitea|Harness|Tekton|AppVeyor|Buddy)\b/i;
+const NOT_ONLY = /\bnot\s+(?:the\s+)?only\b|\bnot only\b|\b(?:too|as well|also|and more|and others|among others|besides)\b/i;
+// A sentence about uploads or CI systems, and words that look ahead: "GitLab next month", "more CI systems are on the way". The check reads
+// the sentences about uploads and CI systems for them, not the whole paragraph ("the next step", "the CLI will print a summary").
+const CI_SUBJECT = new RegExp(`\\b(?:upload\\w*|CI|GitHub Actions|pipelines?|runners?|integrations?)\\b|${OTHER_CI.source}`, 'i');
+const FORWARD = /\b(?:next|soon|coming|planned|will|later|upcoming|roadmap|beta|follows?|arrives?|adding|on the way|in the works|in the pipeline|Q[1-4]|(?:in|by|this|next) (?:January|February|March|April|May|June|July|August|September|October|November|December|year|quarter|month|week))\b/i;
+// Sending reports to the cloud is an upload, whatever the verb.
+const UPLOADISH = /\bupload|\b(?:send|sends|sending|push|pushes|pushing|post|posts|stream|streams|sync|syncs|ship|ships)\b[^.!?]{0,50}\b(?:to|into)\s+(?:probe\s+)?cloud\b/i;
 const BUY_WORD = /\b(?:start|subscribe|checkout|check out|buy|purchase|upgrade)\b/i;
 const BUY_LABEL = /^(?:start|subscribe|checkout|check out|buy|purchase|upgrade)(?:\s+(?:now|today|team|scale|free|on-the-go|plan|the plan))*[.!]?$/i;
 const CHECKOUT_HREF = /checkout|billing|subscribe|purchase|stripe|\/buy\b|\/pay\b/i;
 const APPLY_LABEL = /^apply(?:\s+now|\s+here|\s+today|\s+online|\s+on\s+github|\s+by\s+e-?mail|\s+as\s+an?\s+design[- ]partner|\s+to\s+(?:the\s+)?(?:design[- ]partner\s+)?(?:program|programme|preview|beta|offer))?[.!]?$/i;
 // "100,000 results per month", "1,000 results a month": the count a plan includes. A cap per upload is not a plan's allowance.
 const RESULTS = /\b(\d{1,3}(?:,\d{3})+|\d+)\s+(?:test\s+)?results\s*(?:per|a|\/)\s*month\b/gi;
-const PRICE = /\$\s*(\d[\d,]*(?:\.\d+)?)|\b(\d[\d,]*(?:\.\d+)?)\s*USD\b/g;
+const PRICE = /\$\s*(\d[\d,]*(?:\.\d+)?)|\b(\d[\d,]*(?:\.\d+)?)\s*(?:USD|dollars?)\b/g;
 const PERIOD = /^\s*(?:\/|per|a|an|each)?\s*(?:month|mo|year|yr|seat|user)\b/i;
 
 // blank replaces a span with spaces, keeping newlines, so positions and line numbers stay those of the file.
@@ -270,11 +283,11 @@ export function checkPage(file, raw, plans, apply) {
     }
     return [a, b];
   };
-  // clauseAt is the part of the sentence [a, b) around pos between a ";", ":", a dash or "but", "while", "whereas".
-  const clauseAt = (a, b, pos) => {
+  // clauseAt is the part of the sentence [a, b) around pos between two matches of split.
+  const clauseAt = (a, b, pos, split) => {
     let from = a;
     let to = b;
-    for (const t of text.slice(a, b).matchAll(/[;:\u2014\u2013]|\b(?:but|while|whereas)\b/gi)) {
+    for (const t of text.slice(a, b).matchAll(split)) {
       if (a + t.index < pos) from = a + t.index + t[0].length;
       else {
         to = a + t.index;
@@ -294,7 +307,7 @@ export function checkPage(file, raw, plans, apply) {
   };
 
   for (const m of proseText.matchAll(PRICE)) {
-    const amount = number(m[1] ?? m[2]);
+    const amount = number(m[1] ?? m[2] ?? m[3]);
     const plan = planOf(m.index);
     if (plan) {
       if (plan.price_usd_month === null) at(m.index, m[0].trim(), `${plan.name} has no price in sellable.json`);
@@ -310,7 +323,7 @@ export function checkPage(file, raw, plans, apply) {
   if (front) {
     for (const lit of front[0].matchAll(/(['"`])((?:\\.|(?!\1)[^\\\n])*)\1/g)) {
       for (const m of lit[2].matchAll(PRICE)) {
-        if (!prices.has(number(m[1] ?? m[2]))) at(lit.index + 1 + m.index, m[0].trim(), 'a price in the front matter that is not the price of any plan in sellable.json');
+        if (!prices.has(number(m[1] ?? m[2] ?? m[3]))) at(lit.index + 1 + m.index, m[0].trim(), 'a price in the front matter that is not the price of any plan in sellable.json');
       }
     }
   }
@@ -359,8 +372,8 @@ export function checkPage(file, raw, plans, apply) {
   // A refund is named only next to the refund policy: a link to /refunds/ in its paragraph or <details> block (a question and its
   // answer), or a sentence that does nothing but point to the policy ("Refund requests: see the policy."). The terms wait for the legal
   // review, so a sentence that names a refund and says anything else ("Full refund within 14 days, see our policy.") fails, and so does
-  // a policy that is described ("Our refund policy: 30 days."). "Non-refundable" is not an offer, and a short question ("And refunds?")
-  // is not one either.
+  // a policy that is described ("Our refund policy: 30 days."). "Non-refundable" is not an offer. A question ("Refunds? Yes, always. See
+  // our refund policy.") is a sentence like another: it needs the link.
   const seenRefund = new Set();
   for (const m of text.matchAll(REFUND_WORD)) {
     const [s, e] = paragraphAt(src0, m.index);
@@ -371,33 +384,41 @@ export function checkPage(file, raw, plans, apply) {
     if (/\/refunds\//i.test(src0.slice(s, e) + (inDetails ? src0.slice(open, close) : ''))) continue;
     const sentences = sentencesOf(textOf(text.slice(s, e)) + ' ' + (inDetails ? textOf(text.slice(open, close)) : ''));
     const onlyPolicy = (x) => POLICY_SENTENCE.test(norm(x));
-    if (sentences.some(onlyPolicy) && sentences.every((x) => !REFUND_TEST.test(x) || onlyPolicy(x) || isQuestion(x))) continue;
+    if (sentences.some(onlyPolicy) && sentences.every((x) => !REFUND_TEST.test(x) || onlyPolicy(x))) continue;
     seenRefund.add(s);
     at(m.index, m[0], 'refund terms wait for the legal review: name a refund only next to the link to /refunds/, or in a sentence that only points to the refund policy');
   }
   // "Money-back" is an offer, except in a plain statement that there is none: "There is no money-back offer yet.", "We never offer a
-  // money-back guarantee." Not a question ("Why not a money-back guarantee?"), and not a sentence that goes on with "but".
+  // money-back guarantee." The negation must be in the clause of that "money-back" ("There is no money-back offer, and a money-back offer
+  // for annual plans" fails), and the sentence is not a question and does not go on with "but" or "though".
   for (const m of text.matchAll(/\bmoney[- ]back\b/gi)) {
     const [a, b] = sentenceSpan(m.index);
     const sentence = textOf(text.slice(a, b));
-    if (NO_MONEY_BACK.test(sentence) && !/\?\s*$/.test(sentence) && !/\b(?:but|however|except|unless|although)\b/i.test(sentence)) continue;
+    const clause = textOf(clauseAt(a, b, m.index, MONEY_BACK_SPLIT));
+    if (NO_MONEY_BACK.test(clause) && !/\?\s*$/.test(sentence) && !CONTRAST.test(sentence)) continue;
     at(m.index, m[0], 'refund terms wait for the legal review');
   }
-  // Reports work in any CI; uploads do not. A paragraph that talks about uploads and says "any CI" must (1) have a sentence that says
-  // where uploads work: "GitHub Actions" with "only", "today" or "for now"; (2) look at nothing ahead, as anywhere in the paragraph a
-  // word such as "next", "soon" or "will" could promise another CI; and (3) not promise uploads in the clause of "any CI" itself:
-  // "Reports work with any CI. Uploads work with GitHub Actions only for now."
+  // Reports work in any CI; uploads do not. A paragraph that talks about uploads (or sending reports to the cloud) and says "any CI" must
+  // have (1) a sentence about uploads that says GitHub Actions with "only", "today" or "for now", names no other CI and does not say it
+  // is not the only one; (2) no sentence about uploads or a CI system that looks ahead ("next month", "soon", "on the way", "will");
+  // (3) no promise of uploads in the clause of "any CI" itself: "Reports work with any CI. Uploads to Probe Cloud are built for GitHub
+  // Actions only for now."
   const seen = new Set();
+  const ANY_CI_SPLIT = /[;:\u2014\u2013]|\b(?:but|while|whereas)\b/gi;
   for (const m of text.matchAll(/\bany CI\b/gi)) {
     const [s, e] = paragraphAt(src0, m.index);
     const said = textOf(text.slice(s, e));
-    if (!/\bupload/i.test(said)) continue;
+    if (!UPLOADISH.test(said)) continue;
     const [a, b] = sentenceSpan(m.index);
     if (seen.has(a)) continue;
-    const where = sentencesOf(said).some((x) => /\bGitHub Actions\b/i.test(x) && /\b(?:only|today|for now)\b/i.test(x));
-    if (!where || FORWARD.test(said) || /\bupload/i.test(textOf(clauseAt(a, b, m.index)))) {
+    const sentences = sentencesOf(said);
+    const where = sentences.some(
+      (x) => /\bupload/i.test(x) && /\bGitHub Actions\b/i.test(x) && /\b(?:only|today|for now)\b/i.test(x) && !OTHER_CI.test(x) && !NOT_ONLY.test(x),
+    );
+    const ahead = sentences.some((x) => CI_SUBJECT.test(x) && FORWARD.test(x));
+    if (!where || ahead || UPLOADISH.test(textOf(clauseAt(a, b, m.index, ANY_CI_SPLIT)))) {
       seen.add(a);
-      at(m.index, m[0], 'uploads work from GitHub Actions only: a paragraph with "any CI" and uploads must say where uploads work ("GitHub Actions" with "only", "today" or "for now"), promise nothing ahead ("next", "soon", "will"), and not promise uploads from any CI');
+      at(m.index, m[0], 'uploads work from GitHub Actions only: a paragraph with "any CI" and uploads must have a sentence about uploads that says "GitHub Actions" with "only", "today" or "for now" and names no other CI, no sentence about uploads or a CI that looks ahead ("next", "soon", "will"), and no promise of uploads from any CI');
     }
   }
   for (const m of text.matchAll(GATE)) at(m.index, m[0], 'say "verdict and failures list", not "gate"');
