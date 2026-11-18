@@ -152,13 +152,7 @@ If your testing requirements include running on physical devices across multiple
 
 ## Migration
 
-If you have an existing `integration_test` or Patrol suite, FlutterProbe includes a migration tool that converts Dart test files to ProbeScript:
-
-```bash
-flutterprobe migrate --from integration_test --input test/integration/ --output tests/
-```
-
-The migration tool handles the seven most common test framework patterns. Complex custom logic in test files may require manual adjustment. See the [migration guide](/getting-started/migration/) for details.
+FlutterProbe has no converter for `integration_test` or Patrol suites: those are Dart, and [probe-convert](/tools/probe-convert/) reads Maestro, Gherkin, Robot Framework, Detox and Appium tests. An existing `integration_test` or Patrol suite is rewritten by hand as `.probe` files and run with `probe test`.
 
 ## When to Use Each Tool
 
