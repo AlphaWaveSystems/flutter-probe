@@ -31,7 +31,7 @@ Today only Free is available (1,000 results a month). Team, Scale and On-The-Go 
 
 What it reads: the visible text, the page description (`<meta name="description">` or the layout's `description="..."`), a non-breaking space as a space, front matter strings, and structured data. Prices, results counts, cards and buy controls are read from prose only: fenced code blocks, inline code, `<pre>` and `<code>` are skipped (a shell's `$1` is not a price); the claim, gate and Apply rules read code too.
 
-What it does not check: whether a card's features match `features` (kept by hand); pages other than the ones above (the legal pages, the rest of the docs); the `noindex` of the draft legal pages (`scripts/site_draft_pages_test.go` does); the built `dist/` output (it reads the sources, which the build renders as they are).
+What it does not check: whether a card's features match `features` (kept by hand); pages other than the ones above (the legal pages, the rest of the docs); the text of the legal pages (`scripts/site_legal_pages_test.go` does); the built `dist/` output (it reads the sources, which the build renders as they are).
 
 `go test ./scripts/` runs the same check (`scripts/site_truth_test.go`): one broken page per rule, the true edits that must pass, and the review's table of true edits and false claims (`scripts/testdata/site_truth_cases.json`). In CI (`CI` set) a missing `node` fails the test instead of skipping it.
 

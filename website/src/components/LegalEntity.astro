@@ -1,6 +1,6 @@
 ---
 // The company's identification as the legal pages print it: name, address, telephone and email, from src/data/legal.json.
-// An empty field is left out; scripts/site_legal_pages_test.go refuses a release in which the address is empty.
+// An empty field is left out; scripts/site_legal_pages_test.go and the build refuse a release in which the address or the telephone is empty.
 import legal from '../data/legal.json';
 
 interface Props {

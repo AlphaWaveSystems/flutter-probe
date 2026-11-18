@@ -31,7 +31,12 @@ func readSite(t *testing.T, p string) string {
 
 var (
 	legalTag      = regexp.MustCompile(`(?s)<Legal\b[^>]*>`)
-	legalLeftover = regexp.MustCompile(`(?i)\bTODO\b|\bdraft\b|\bborrador\b|\bnoindex\b|updated=`)
+	legalLeftover = regexp.MustCompile(`\bTODO\b|(?i:\bdrafts?\b|\bborrador(?:es)?\b|\bnoindex\b|updated=)`)
+	// A page never states the version or the date itself: both come from legal.json through the layout, so the two languages cannot differ.
+	legalOwnVersion = regexp.MustCompile(`(?i)\bversi[oó]n \d|\bvigente desde\b|\beffective (?:from |on )?\d|\b20\d\d-\d\d-\d\d\b`)
+	legalHref       = regexp.MustCompile(`href="(/[^"#]*)`)
+	legalTwinLink   = regexp.MustCompile(`href="([^"]*)" hreflang="(en|es)"`)
+	legalBlocks     = regexp.MustCompile(`<(h2|li|p|ul)\b`)
 )
 
 // legalPageProblems returns what is wrong with the source of one legal page: page is its own path name, twin the other language's.
@@ -49,7 +54,43 @@ func legalPageProblems(src, page, twin string, spanish bool) (problems []string)
 	if m := legalLeftover.FindString(src); m != "" {
 		problems = append(problems, page+".astro still carries "+m+": a page in effect is not a draft")
 	}
+	if m := legalOwnVersion.FindString(src); m != "" {
+		problems = append(problems, page+".astro states "+m+" itself: the version and the date come from legal.json through the layout")
+	}
+	twinLang := "es"
+	if spanish {
+		twinLang = "en"
+	}
+	for _, m := range legalTwinLink.FindAllStringSubmatch(src, -1) {
+		if m[1] != "/"+twin+"/" || m[2] != twinLang {
+			problems = append(problems, page+".astro links "+m[1]+" as its "+m[2]+" version; its other-language page is /"+twin+"/")
+		}
+	}
 	return problems
+}
+
+// legalShape is the structure of a page: its headings, paragraphs, lists and items in order. The two languages of a page have the same one,
+// so a section or a list item dropped from one language only is caught.
+func legalShape(src string) string {
+	var tags []string
+	for _, m := range legalBlocks.FindAllStringSubmatch(src, -1) {
+		tags = append(tags, m[1])
+	}
+	return strings.Join(tags, " ")
+}
+
+// siteHas reports whether an internal link (/terms/, /getting-started/installation/) has a page behind it.
+func siteHas(href string) bool {
+	p := strings.Trim(href, "/")
+	if p == "" {
+		return true
+	}
+	for _, f := range []string{"src/pages/" + p + ".astro", "src/content/docs/" + p + ".md", "src/content/docs/" + p + ".mdx", "src/content/docs/" + p + "/index.md", "src/content/docs/" + p + "/index.mdx"} {
+		if _, err := os.Stat("../website/" + f); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func TestLegalPagesComeInPairsAndAreNotDrafts(t *testing.T) {
@@ -60,15 +101,53 @@ func TestLegalPagesComeInPairsAndAreNotDrafts(t *testing.T) {
 		for _, p := range legalPageProblems(readSite(t, "src/pages/"+pair[1]+".astro"), pair[1], pair[0], true) {
 			t.Error(p)
 		}
-	}
-	layout := readSite(t, "src/layouts/Legal.astro")
-	for _, w := range []string{"legal.version", "legal.effective"} {
-		if !strings.Contains(layout, w) {
-			t.Errorf("Legal.astro does not print %s from src/data/legal.json", w)
+		en, es := readSite(t, "src/pages/"+pair[0]+".astro"), readSite(t, "src/pages/"+pair[1]+".astro")
+		if a, b := legalShape(en), legalShape(es); a != b {
+			t.Errorf("%s.astro and %s.astro do not have the same headings, paragraphs and list items:\n%s\n%s", pair[0], pair[1], a, b)
+		}
+		for _, src := range []string{en, es} {
+			for _, m := range legalHref.FindAllStringSubmatch(src, -1) {
+				if !siteHas(m[1]) {
+					t.Errorf("%s / %s link to %s, which is not a page of the site", pair[0], pair[1], m[1])
+				}
+			}
 		}
 	}
-	if regexp.MustCompile(`sitemap\(\s*\{`).MatchString(readSite(t, "astro.config.mjs")) {
-		t.Error("astro.config.mjs filters the sitemap: the legal pages are in effect and belong in it")
+	// The frame: the version line and the twin link are the layout's, from legal.json; nothing of the draft state is left in either layout.
+	layout, frame := readSite(t, "src/layouts/Legal.astro"), readSite(t, "src/layouts/Site.astro")
+	for _, w := range []string{"legal.version", "legal.effective", "{line}", "<a href={other} hreflang=", "lang={lang} other={other}"} {
+		if !strings.Contains(layout, w) {
+			t.Errorf("Legal.astro no longer contains %s: it prints the version, the date and the link to the other language", w)
+		}
+	}
+	for _, w := range []string{"<html lang={lang}>", `<link rel="alternate" hreflang={lang} href={url} />`, `<link rel="alternate" hreflang={otherLang}`, "'/terminos/'", "'/terms/'"} {
+		if !strings.Contains(frame, w) {
+			t.Errorf("Site.astro no longer contains %s: a legal page states its language, links its twin and links the legal pages of its language", w)
+		}
+	}
+	for name, src := range map[string]string{"Legal.astro": layout, "Site.astro": frame} {
+		if m := legalLeftover.FindString(src); m != "" {
+			t.Errorf("%s still carries %s: the pages are in effect", name, m)
+		}
+		if m := regexp.MustCompile(`\b20\d\d-\d\d-\d\d\b|\b[1-9]\d*\.\d+\.\d+\b`).FindString(src); m != "" {
+			t.Errorf("%s states %s itself: the version and the date come from legal.json", name, m)
+		}
+	}
+	entity := readSite(t, "src/components/LegalEntity.astro")
+	for _, w := range []string{"{c.name}", "{c.address}", "{c.phone}", "{c.email}"} {
+		if !strings.Contains(entity, w) {
+			t.Errorf("LegalEntity.astro no longer prints %s", w)
+		}
+	}
+	// The sitemap lists every page: a filter in any form would be a leftover of the draft state.
+	if !regexp.MustCompile(`(?m)^\s*sitemap\(\),$`).MatchString(readSite(t, "astro.config.mjs")) {
+		t.Error("astro.config.mjs no longer calls sitemap() without options: the legal pages are in effect and belong in the sitemap")
+	}
+	// The sales pages do not call the legal pages drafts either.
+	for _, page := range []string{"src/pages/index.astro", "src/pages/pricing.astro", "src/pages/probe-cloud.astro"} {
+		if m := regexp.MustCompile(`(?i)\bdrafts?\b|\bborrador(?:es)?\b`).FindString(readSite(t, page)); m != "" {
+			t.Errorf("%s says %q: the legal pages are in effect", page, m)
+		}
 	}
 }
 
@@ -88,6 +167,11 @@ func TestLegalPageProblems(t *testing.T) {
 		{"a TODO", strings.Replace(ok, "<p>x</p>", "<p>TODO (owner): x</p>", 1), false, true},
 		{"a draft line", strings.Replace(ok, "<p>x</p>", "<p>This is a draft.</p>", 1), false, true},
 		{"noindex", strings.Replace(ok, `other=`, `noindex other=`, 1), false, true},
+		{"its own version line", strings.Replace(ok, "<p>x</p>", "<p>Version 1.0.1</p>", 1), false, true},
+		{"its own date", strings.Replace(ok, "<p>x</p>", "<p>Vigente desde el 1 de enero</p>", 1), true, true},
+		{"a body link to the twin", strings.Replace(ok, "<p>x</p>", `<p><a href="/terminos/" hreflang="es">es</a></p>`, 1), false, false},
+		{"a body link to another page as the twin", strings.Replace(ok, "<p>x</p>", `<p><a href="/reembolsos/" hreflang="es">es</a></p>`, 1), false, true},
+		{"a body link to the twin in the wrong language", strings.Replace(ok, "<p>x</p>", `<p><a href="/terminos/" hreflang="en">es</a></p>`, 1), false, true},
 		{"no Legal tag", "<p>x</p>", false, true},
 	}
 	for _, c := range cases {
@@ -134,6 +218,9 @@ func legalDataProblems(d legalData) (problems []string) {
 	} else if !regexp.MustCompile(`\b\d{5}\b`).MatchString(d.Company.Address) || !strings.Contains(d.Company.Address, "Jalisco") {
 		problems = append(problems, "legal.json: company.address has no five-digit postcode or does not name Jalisco")
 	}
+	if len(regexp.MustCompile(`\D`).ReplaceAllString(d.Company.Phone, "")) < 10 {
+		problems = append(problems, "legal.json: company.phone is empty or has fewer than 10 digits: consumer law asks for a telephone number next to the address; the owner supplies it")
+	}
 	if strings.TrimSpace(d.Company.Municipality) == "" {
 		problems = append(problems, "legal.json: company.municipality is empty: it decides the judicial district of the courts clause")
 	}
@@ -155,6 +242,7 @@ func TestLegalDataProblems(t *testing.T) {
 	ok.Version, ok.Effective = "1.0.0", "2026-11-17"
 	ok.Company.Name, ok.Company.Email = "Alpha Wave Systems S.A. de C.V.", "support@alphawavesystems.com"
 	ok.Company.Address, ok.Company.Municipality = "Calle Ejemplo 1, Col. Ejemplo, 44100 Guadalajara, Jalisco, México", "Guadalajara"
+	ok.Company.Phone = "+52 33 0000 0000"
 	change := func(f func(d *legalData)) legalData { d := ok; f(&d); return d }
 	cases := []struct {
 		name string
@@ -165,6 +253,8 @@ func TestLegalDataProblems(t *testing.T) {
 		{"no address", change(func(d *legalData) { d.Company.Address = " " }), true},
 		{"an address without a postcode", change(func(d *legalData) { d.Company.Address = "Calle Ejemplo 1, Guadalajara, Jalisco" }), true},
 		{"an address outside Jalisco", change(func(d *legalData) { d.Company.Address = "Calle Ejemplo 1, 06000 Ciudad de México" }), true},
+		{"no telephone", change(func(d *legalData) { d.Company.Phone = "" }), true},
+		{"a telephone that is too short", change(func(d *legalData) { d.Company.Phone = "33 1234" }), true},
 		{"no municipality", change(func(d *legalData) { d.Company.Municipality = "" }), true},
 		{"a version that is a word", change(func(d *legalData) { d.Version = "Draft" }), true},
 		{"a date in words", change(func(d *legalData) { d.Effective = "17 November 2026" }), true},
@@ -184,20 +274,20 @@ func TestLegalDataProblems(t *testing.T) {
 // languages, and never says what the law forbids a provider to say to a consumer.
 func TestLegalPagesKeepTheirRequiredClauses(t *testing.T) {
 	required := map[string][]string{
-		"terms": {"<LegalEntity", "renews automatically", "at least five calendar days", "expressly agree", "MERCHANTABILITY", "WHICHEVER IS GREATER",
+		"terms": {"<LegalEntity", "renews automatically", "at least five calendar days", "express and informed consent", "at no cost and with no penalty", "MERCHANTABILITY", "100 UNITED STATES DOLLARS, WHICHEVER IS GREATER", "consumer protection law that covers you",
 			"wilful misconduct (dolo)", "clearly and conclusively waive", "If you are a consumer", "PROFECO", "prevails", `href="/refunds/"`, `href="/privacy/"`},
-		"terminos": {"<LegalEntity", "se renueva automáticamente", "al menos cinco días naturales", "consentimiento expreso e informado", "COMERCIABILIDAD", "LO QUE SEA MAYOR",
+		"terminos": {"<LegalEntity", "se renueva automáticamente", "al menos cinco días naturales", "consentimiento expreso e informado", "sin costo ni penalización", "COMERCIABILIDAD", "100 DÓLARES DE LOS ESTADOS UNIDOS DE AMÉRICA, LO QUE SEA MAYOR", "legislación de protección al consumidor que le corresponda",
 			"dolo o mala fe", "renuncian clara y terminantemente", "Si usted es consumidor", "PROFECO", "prevalece", `href="/reembolsos/"`, `href="/aviso-de-privacidad/"`},
 		"privacy": {"<LegalEntity", "no secondary purposes", "20 business days", "15 business days", "Secretaría Anticorrupción y Buen Gobierno", "probe_session", "probe_login",
-			"revoke", "limit the use or disclosure", "prevails", `href="/subprocessors/"`},
+			"revoke", "limit the use or disclosure", "article 36", "independent controller", "By accepting this notice you accept the transfers", "personal data department", "once that period has expired", "prevails", `href="/subprocessors/"`},
 		"aviso-de-privacidad": {"<LegalEntity", "No tenemos finalidades secundarias", "20 días hábiles", "15 días hábiles", "Secretaría Anticorrupción y Buen Gobierno", "probe_session", "probe_login",
-			"revocar el consentimiento", "limitemos el uso o la divulgación", "remisión", "prevalece", `href="/subencargados/"`},
+			"revocar el consentimiento", "limitemos el uso o la divulgación", "remisión", "artículo 36", "responsable independiente", "usted acepta las transferencias aquí descritas", "departamento de datos personales", "a partir del vencimiento de ese plazo", "prevalece", `href="/subencargados/"`},
 		"refunds":       {"at once", "no penalty", "cannot be waived", "PROFECO", "prevails", `href="/terms/"`},
 		"reembolsos":    {"de inmediato", "sin penalización", "irrenunciable", "PROFECO", "prevalece", `href="/terminos/"`},
-		"subprocessors": {"<h2>Stripe</h2>", "<h2>Cloudflare</h2>", "<h2>Resend</h2>", "<h2>GitHub</h2>", "before a new provider starts"},
-		"subencargados": {"<h2>Stripe</h2>", "<h2>Cloudflare</h2>", "<h2>Resend</h2>", "<h2>GitHub</h2>", "antes de que un nuevo proveedor"},
+		"subprocessors": {"<h2>Stripe</h2>", "<h2>Cloudflare</h2>", "<h2>Resend</h2>", "<h2>GitHub</h2>", "independent controller", "on its own account", "before a new provider starts"},
+		"subencargados": {"<h2>Stripe</h2>", "<h2>Cloudflare</h2>", "<h2>Resend</h2>", "<h2>GitHub</h2>", "responsable independiente", "por cuenta propia", "antes de que un nuevo proveedor"},
 	}
-	forbidden := regexp.MustCompile(`(?i)\bno refunds?\b|non-refundable|no right of withdrawal|sin derecho a reembolso|no reembolsable|\bexclusively\b|\bexclusivamente\b|GDPR does not apply|art(?:icle|ículo)?\.? 27`)
+	forbidden := regexp.MustCompile(`(?i)\bno refunds?\b|non-refundable|no right of withdrawal|sin derecho a reembolso|no reembolsable|\bno hay reembolsos?\b|\bno se (?:hacen|otorgan) reembolsos\b|\bexclusively\b|\bexclusivamente\b|\bexclusive (?:jurisdiction|venue)\b|\b(?:jurisdicción|competencia) exclusiva\b|GDPR does not apply|art(?:icle|ículo)?\.? 27\b|\bnot verified\b|\bno hemos verificado\b|\bhave not verified\b`)
 	for page, want := range required {
 		src := readSite(t, "src/pages/"+page+".astro")
 		for _, w := range want {

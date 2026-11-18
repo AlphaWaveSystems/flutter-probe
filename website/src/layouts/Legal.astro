@@ -16,7 +16,7 @@ const here = path ?? Astro.url.pathname;
 const date = new Date(`${legal.effective}T00:00:00Z`).toLocaleDateString(lang === 'es' ? 'es-MX' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 const line = lang === 'es' ? `Versión ${legal.version}, vigente desde el ${date}` : `Version ${legal.version}, effective ${date}`;
 ---
-<Site title={`${title} - FlutterProbe`} description={description} path={here} lang={lang}>
+<Site title={`${title} - FlutterProbe`} description={description} path={here} lang={lang} other={other}>
   <div class="prose" lang={lang}>
     <h1>{title}</h1>
     <p class="updated">{line}{other && <> &middot; <a href={other} hreflang={lang === 'es' ? 'en' : 'es'}>{lang === 'es' ? 'English version' : 'Versión en español'}</a></>}</p>
