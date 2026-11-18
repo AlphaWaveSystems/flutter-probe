@@ -20,6 +20,7 @@ const widgetFamilies = <String>[
   'lists',
   'dialogs',
   'progress',
+  'layout',
 ];
 
 /// The screen of [family], or null when there is none.
@@ -32,6 +33,7 @@ Widget? widgetFamilyScreen(String family) => switch (family) {
   'lists' => const ListsFamilyScreen(),
   'dialogs' => const DialogsFamilyScreen(),
   'progress' => const ProgressFamilyScreen(),
+  'layout' => const LayoutFamilyScreen(),
   _ => null,
 };
 
@@ -1347,6 +1349,96 @@ class _ProgressFamilyScreenState extends State<ProgressFamilyScreen> {
           const SizedBox(height: 12),
           _s('wf_linear', (k) => LinearProgressIndicator(key: k, value: 0.4)),
           _state('wf_progress_state', 'Status: $_status'),
+        ],
+      ),
+    );
+  }
+}
+
+/// Layout: widgets a person cannot see or cannot tap (docs/compat/NEXT.md, item 11). Each button counts its taps in a state text, so a
+/// test shows whether a tap arrived, not only that the step passed:
+/// - an `Opacity(opacity: 0)` button: painted transparent, still laid out and hit-tested (`Faded: N`)
+/// - a `Visibility(visible: false)` text kept in the tree (`maintainState`) and one removed from it, and an `Offstage` text
+/// - an `IgnorePointer` button (`Ignored: N`) and an `AbsorbPointer` button (`Absorbed: N`)
+/// - a button in a `Stack` fully covered by a `GestureDetector` that counts its own taps (`Covered: N`, `Cover: N`)
+class LayoutFamilyScreen extends StatefulWidget {
+  const LayoutFamilyScreen({super.key});
+
+  @override
+  State<LayoutFamilyScreen> createState() => _LayoutFamilyScreenState();
+}
+
+class _LayoutFamilyScreenState extends State<LayoutFamilyScreen> {
+  final _taps = <String, int>{};
+
+  void _count(String name) =>
+      setState(() => _taps[name] = (_taps[name] ?? 0) + 1);
+
+  Widget _button(String id, String label, String name) => _s(
+    id,
+    (k) => ElevatedButton(
+      key: k,
+      onPressed: () => _count(name),
+      child: Text(label),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    String n(String name) => '${_taps[name] ?? 0}';
+    return Scaffold(
+      appBar: AppBar(title: const Text('Layout')),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          Opacity(
+            opacity: 0,
+            child: _button('wf_faded', 'Faded button', 'faded'),
+          ),
+          Visibility(
+            visible: false,
+            maintainState: true,
+            child: _s('wf_kept', (k) => Text('Kept hidden', key: k)),
+          ),
+          Visibility(
+            visible: false,
+            child: _s('wf_gone', (k) => Text('Gone text', key: k)),
+          ),
+          Offstage(
+            child: _s('wf_offstage', (k) => Text('Offstage text', key: k)),
+          ),
+          IgnorePointer(
+            child: _button('wf_ignored', 'Ignored button', 'ignored'),
+          ),
+          AbsorbPointer(
+            child: _button('wf_absorbed', 'Absorbed button', 'absorbed'),
+          ),
+          SizedBox(
+            height: 56,
+            child: Stack(
+              children: [
+                _button('wf_covered', 'Covered button', 'covered'),
+                Positioned.fill(
+                  child: _s(
+                    'wf_cover',
+                    (k) => GestureDetector(
+                      key: k,
+                      onTap: () => _count('cover'),
+                      child: Container(
+                        color: Colors.blueGrey,
+                        alignment: Alignment.center,
+                        child: const Text('Cover'),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _state(
+            'wf_layout_state',
+            'Faded: ${n('faded')}, Ignored: ${n('ignored')}, Absorbed: ${n('absorbed')}, Covered: ${n('covered')}, Cover: ${n('cover')}',
+          ),
         ],
       ),
     );

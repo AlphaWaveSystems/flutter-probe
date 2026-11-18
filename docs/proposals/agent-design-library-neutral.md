@@ -32,12 +32,12 @@ on 2026-11-18 (the page says it was last updated on 2026-11-09 and reflects Flut
   `material_ui`'s own `ButtonStyleButton`. The widgets-layer classes (`Widget`, `Text`, `Semantics`, `GestureDetector`, `EditableText`) are
   the framework's.
 - Timeline (migration guide): contributions to the in-framework libraries were frozen in 3.44, the packages could be adopted from 3.47, and
-  the in-framework libraries are formally deprecated in 3.50. **No removal version is stated.**
+  the in-framework libraries are formally deprecated in 3.50. **No removal version is stated** (checked on the whole page, read on 2026-11-18).
 - An app can mix both libraries through `MaterialUiCompatibilityBridge`, which the guide describes: it injects theme and localization data
   downward, and it cannot resolve type mismatches when a dependency's public API uses in-framework types. The guide names no Cupertino bridge
   class (it says `material_ui` and `cupertino_ui` "provide compatibility bridge utilities"), and it does not call the bridge deprecated or
   temporary.
-- Package authors are told to treat the migration as a major version bump. Testing tools are not mentioned.
+- Package authors are told to treat the migration as a major version bump. Testing tools and integration testing are not mentioned on the page (checked on the whole page, read on 2026-11-18).
 - The agent today declares `flutter: ">=3.19.0"` and `sdk: ">=3.3.0 <4.0.0"` (`probe_agent/pubspec.yaml`). Its CI runs Flutter 3.29.x.
 
 ## Where the agent names a design-library class
@@ -53,8 +53,8 @@ Every `is`/`is!` test on a class of `material.dart` or `cupertino.dart` in `prob
 | `InkResponse` | `executor.dart` `_findDirectTapTarget` (710; the `InkResponse` tests at 720 and 739) | direct `onTap` on a matched `Semantics` wrapper | falls back to a real pointer tap, which works (#852: `tap "Submit"` worked) |
 | `Tooltip` | `finder.dart` (252), `executor.dart` `_textOf` (2308; the `Tooltip` test at 2326) | the tooltip fallback of a text selector, and its read (#818) | **found nothing** (#852) |
 | the names of the controls the agent reads, with the framework type test for each | `executor.dart` `_enabledReadNames` (2233), `_checkedReadNames` (2244), `_isLookalike`, `_lookalikeBelow`, `_refuseUnreadControl` (the #855 stopgap) | recognises a control of the same name that is not the framework class, to refuse instead of answering | exists so that a `material_ui` control is refused; it must be kept in step with whatever option is chosen |
-| `TextField`, `CupertinoTextField` (`FormField` is widgets) | `finder.dart` `_fieldKeyOf` (107) | the key of a field around a match | not measured. `FormField` still covers `TextFormField` |
-| `ButtonStyleButton`, `IconButton`, `FloatingActionButton`, `CupertinoButton`, `Checkbox`, `Radio`, `Switch`, `CupertinoSwitch`, `InkResponse`, `Tooltip` | `device_view.dart` `_isInteractive` (215-252) | which widgets `probe device view` and Studio's inspector mark as interactive | not measured. Expected: these controls are not marked |
+| `TextField`, `CupertinoTextField` (`FormField` is widgets) | `finder.dart` `_fieldKeyOf` (defined at 100; the `is TextField` test at 107) | the key of a field around a match | not measured. `FormField` still covers `TextFormField` |
+| `ButtonStyleButton`, `IconButton`, `FloatingActionButton`, `CupertinoButton`, `Checkbox`, `Radio`, `Switch`, `CupertinoSwitch`, `InkResponse`, `Tooltip` | `device_view.dart` `_isInteractive` (214-252) | which widgets `probe device view` and Studio's inspector mark as interactive | not measured. Expected: these controls are not marked |
 
 The obscured-field protection, `EditableText`, focus, hit testing, `Text`, `RichText`, `Semantics` and `GestureDetector` are all
 widgets-layer classes and are unaffected.
