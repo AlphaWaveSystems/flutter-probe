@@ -4,18 +4,22 @@
 #   cp probe-tests/negative/pickers.probe.expect-fail /tmp/pickers-negative.probe
 #   probe test /tmp/pickers-negative.probe --device <serial> -y       # (the pickers build, the same probe.yaml as for pickers.probe)
 #
-# Expected: 0 passed, 11 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
+# Expected: 0 passed, 12 failed, each with the message in its comment. A test that passes is a finding: either the agent changed or the positive suite no longer proves what it says.
 # Each test must fail at its own step, with the message in its comment. A failure at the `wait until` of `before each test` (a timeout
 # waiting for the screen's last element) is NOT the expected failure: the screen never showed, and the run proves nothing.
-# N7 to N9 are KNOWN GAPS: the step is right and fails today (issue #864); when the agent is fixed such a test passes, and then it moves to pickers.probe.
+# N8 to N10 are KNOWN GAPS: the step is right and fails today (issue #864); when the agent is fixed such a test passes, and then it moves to pickers.probe.
 
 before each test
   restart the app
   # Right after a restart the agent can answer while the screen is still being built (issue #793): wait for the screen's last element with an id.
   wait until #wf_icon_menu_state appears
 
+# Expected: see "Blue": Expected to see "text("Blue")" but it was not found (the items of a closed dropdown are not seen)
+test "N1 the items of a closed dropdown are not seen"
+  see "Blue"
+
 # Expected: see "Color: Blue": Expected to see "text("Color: Blue")" but it was not found (Green was chosen)
-test "N1 the value is the item that was chosen"
+test "N2 the value is the item that was chosen"
   tap #wf_dropdown
   wait for animations to end
   tap "Green"
@@ -23,17 +27,17 @@ test "N1 the value is the item that was chosen"
   see "Color: Blue"
 
 # Expected: see "Cut": Expected to see "text("Cut")" but it was not found (the items of a closed popup menu are not in the tree)
-test "N2 the items of a closed popup menu are not seen"
+test "N3 the items of a closed popup menu are not seen"
   see "Cut"
 
 # Expected: see "Never shown": Expected to see "text("Never shown")" but it was not found (a tap on a disabled popup menu opens nothing)
-test "N3 a disabled popup menu does not open"
+test "N4 a disabled popup menu does not open"
   tap #wf_popup_off
   wait for animations to end
   see "Never shown"
 
 # Expected: see "Item taps: 2": Expected to see "text("Item taps: 2")" but it was not found (one item was tapped once)
-test "N4 the item counter counts the taps on items"
+test "N5 the item counter counts the taps on items"
   tap #wf_dropdown
   wait for animations to end
   tap "Green"
@@ -41,7 +45,7 @@ test "N4 the item counter counts the taps on items"
   see "Item taps: 2"
 
 # Expected: see "Cut": Expected to see "text("Cut")" but it was not found (the tap on "Actions" under the open dropdown landed on the barrier and opened no popup menu)
-test "N5 a button under an open dropdown is not pressed by a tap"
+test "N6 a button under an open dropdown is not pressed by a tap"
   tap #wf_dropdown
   wait for animations to end
   tap "Actions"
@@ -49,25 +53,25 @@ test "N5 a button under an open dropdown is not pressed by a tap"
   see "Cut"
 
 # Expected: tap #wf_nowhere: Widget not found: #wf_nowhere
-test "N6 an id that is not on the screen"
+test "N7 an id that is not on the screen"
   tap #wf_nowhere
 
 # Expected: see #wf_dropdown_off is disabled: "#wf_dropdown_off" is enabled (KNOWN GAP, issue #864: this step is RIGHT and fails today, because the agent does not read a DropdownButton; when it is fixed this test passes, which is a finding: move it to pickers.probe)
-test "N7 KNOWN GAP: a disabled dropdown is read as enabled, id on the control"
+test "N8 KNOWN GAP: a disabled dropdown is read as enabled, id on the control"
   see #wf_dropdown_off is disabled
 
 # Expected: see #wf_dropdown_off_w is disabled: "#wf_dropdown_off_w" is enabled (KNOWN GAP, issue #864: this step is RIGHT and fails today; the id is on a wrapper only)
-test "N8 KNOWN GAP: a disabled dropdown is read as enabled, id on a wrapper"
+test "N9 KNOWN GAP: a disabled dropdown is read as enabled, id on a wrapper"
   see #wf_dropdown_off_w is disabled
 
 # Expected: see #wf_popup_off is disabled: "#wf_popup_off" is enabled (KNOWN GAP, issue #864: this step is RIGHT and fails today, because the agent does not read a PopupMenuButton)
-test "N9 KNOWN GAP: a disabled popup menu is read as enabled"
+test "N10 KNOWN GAP: a disabled popup menu is read as enabled"
   see #wf_popup_off is disabled
 
 # Expected: see #wf_dropdown contains "Pick a color": "#wf_dropdown" contains "", not "Pick a color" (by design: `#id contains` reads the text of the matched widget itself, and a DropdownButton is not a Text: read it by its text, `see "Pick a color"`)
-test "N10 the text of a dropdown is not read through its id"
+test "N11 the text of a dropdown is not read through its id"
   see #wf_dropdown contains "Pick a color"
 
-# Expected: see #wf_popup contains "Actions": "#wf_popup" contains "", not "Actions" (by design, as N10)
-test "N11 the text of a popup menu button is not read through its id"
+# Expected: see #wf_popup contains "Actions": "#wf_popup" contains "", not "Actions" (by design, as N11)
+test "N12 the text of a popup menu button is not read through its id"
   see #wf_popup contains "Actions"

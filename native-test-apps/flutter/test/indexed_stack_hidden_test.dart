@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_probe_agent/src/executor.dart';
@@ -8,20 +7,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:probe_flutter_fixture/widget_families.dart';
 
 // What the agent does with the children of an IndexedStack that are not the shown one, and with the items of a closed DropdownButton (which keeps its items in
-// an IndexedStack). Measured: with Flutter 3.44.8 the agent does not see them (`see` fails, `don't see` passes); with Flutter 3.50.0 it does (`see` passes, `don't
-// see` fails). The agent ignores a widget with an `Offstage(offstage: true)` or `Visibility(visible: false)` ancestor; Flutter 3.44.8 wraps the children that are
-// not shown in a `Visibility(visible: false)`, and Flutter 3.50.0 does not (it keeps `_VisibilityScope` and `_RawIndexedStack` only).
+// an IndexedStack): it does not see them, with Flutter 3.44.8 and with Flutter 3.50.0. Before the fix of issue #900 it saw them with Flutter 3.50.0: the agent
+// ignores a widget behind an `Offstage` or a `Visibility(visible: false)`, 3.44.8 wraps the children that are not shown in a `Visibility(visible: false)`, and
+// 3.50.0 does not (only `RenderIndexedStack` hides them there). The agent's own test of the rule is probe_agent/test/indexed_stack_hidden_test.dart; this one runs
+// it on the fixture's pickers screen and on a plain IndexedStack, through the same `see` the device suite uses.
 //
-// This test PINS that difference: it expects "not seen" on the Dart of Flutter 3.44.8 (3.12) and "seen" from the Dart of Flutter 3.50.0 (3.14), so it passes on both
-// today. When the agent is fixed, the expectation for the newer Flutter fails: change it then, and the suite's matrix section with it. Run it BY HAND with
-// `flutter test test/indexed_stack_hidden_test.dart` in this folder; it needs no device, and CI does not run it (CI runs the tests of probe_agent only).
-
-/// Whether this Flutter is the one that shows the behaviour of 3.50: the Dart that ships with it is 3.14 or newer.
-bool get _isFlutter350OrNewer {
-  final m = RegExp(r'^(\d+)\.(\d+)').firstMatch(Platform.version)!;
-  return int.parse(m.group(1)!) > 3 ||
-      (int.parse(m.group(1)!) == 3 && int.parse(m.group(2)!) >= 14);
-}
+// Run it BY HAND, once with each Flutter, with `flutter test test/indexed_stack_hidden_test.dart` in this folder; it needs no device, and CI does not run it (CI
+// runs the tests of probe_agent only).
 
 Future<bool> _passes(
   WidgetTester tester,
@@ -53,7 +45,7 @@ Future<bool> _passes(
 
 void main() {
   testWidgets(
-    'the agent and the children of an IndexedStack that are not shown',
+    'the agent does not see the children of an IndexedStack that are not shown',
     (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
@@ -67,39 +59,36 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(await _passes(tester, 'Shown page', negated: false), isTrue);
-      final seen = _isFlutter350OrNewer;
       expect(
         await _passes(tester, 'Hidden page', negated: false),
-        seen,
-        reason:
-            'see "Hidden page": passes only where the agent cannot tell the child is not shown',
+        isFalse,
+        reason: 'see "Hidden page"',
       );
       expect(
         await _passes(tester, 'Hidden page', negated: true),
-        !seen,
-        reason: 'don\'t see "Hidden page": the opposite',
+        isTrue,
+        reason: 'don\'t see "Hidden page"',
       );
     },
   );
 
   testWidgets(
-    'the agent and the items of a closed DropdownButton on the pickers screen',
+    'the agent does not see the items of a closed DropdownButton on the pickers screen',
     (tester) async {
       await tester.pumpWidget(const MaterialApp(home: PickersFamilyScreen()));
       await tester.pumpAndSettle();
-      final seen = _isFlutter350OrNewer;
       expect(await _passes(tester, 'Pick a color', negated: false), isTrue);
       expect(
         await _passes(tester, 'Blue', negated: false),
-        seen,
+        isFalse,
         reason: 'see "Blue", an item of the closed dropdown',
       );
       expect(
         await _passes(tester, 'Blue', negated: true),
-        !seen,
+        isTrue,
         reason: 'don\'t see "Blue"',
       );
-      // The items of a PopupMenuButton exist only while its menu is open: not seen on either version.
+      // The items of a PopupMenuButton exist only while its menu is open.
       expect(await _passes(tester, 'Cut', negated: false), isFalse);
     },
   );

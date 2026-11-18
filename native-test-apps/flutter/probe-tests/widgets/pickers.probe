@@ -1,10 +1,11 @@
 # Needs the pickers build: flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=pickers (see the README).
 # What each test shows is also in docs/compat/MATRIX.md: a matrix cell is set only from a test that ran.
 #
-# This suite asserts nothing about whether the items of a CLOSED DropdownButton are seen. A DropdownButton keeps its items in an IndexedStack, and the agent
-# treats the children of an IndexedStack that are not shown differently on Flutter 3.44.8 (not seen) and on Flutter 3.50.0 (seen): see the matrix section and
-# native-test-apps/flutter/test/indexed_stack_hidden_test.dart. So the tests below prove what they need through behaviour that is the same on both: a state
-# text that changes, a counter, a tap that reaches or does not reach another widget. The items of a PopupMenuButton exist only while its menu is open.
+# A DropdownButton keeps its items in an IndexedStack. Before the fix of issue #900 the agent saw the children of an IndexedStack that are not shown with
+# Flutter 3.50.0 (and not with 3.44.8), so a suite that asserted whether the items of a closed dropdown are seen gave different results on the two versions:
+# see the matrix section and native-test-apps/flutter/test/indexed_stack_hidden_test.dart. Most tests below prove what they need through behaviour that is the
+# same everywhere: a state text that changes, a counter, a tap that reaches or does not reach another widget. The items of a PopupMenuButton exist only while
+# its menu is open.
 #
 # A menu is a route: `wait for animations to end` waits for it to open or to close.
 # A state text such as "Action: Copy" contains the name of an item, and a text selector matches a part of a text: after a choice, wait for the animations, not
@@ -28,6 +29,17 @@ test "a dropdown opens by a tap on its hint text, and an item is chosen"
   wait for animations to end
   tap "Green"
   see "Color: Green"
+
+test "the items of a closed dropdown are not seen, are seen while it is open, and are not seen after a choice"
+  don't see "Blue"
+  don't see "Spare"
+  tap #wf_dropdown
+  wait for animations to end
+  see "Blue"
+  tap "Red"
+  wait for animations to end
+  see "Color: Red"
+  don't see "Blue"
 
 test "choosing an item sets the value and the button shows it"
   tap #wf_dropdown
@@ -89,8 +101,10 @@ test "a tap on a button under an open dropdown lands on the barrier: the menu cl
 test "a tap on a disabled dropdown opens nothing, with the id on the control and on a wrapper: the page still answers"
   tap #wf_dropdown_off
   wait for animations to end
+  don't see "Spare"
   tap #wf_dropdown_off_w
   wait for animations to end
+  don't see "Extra"
   tap "Actions"
   wait for animations to end
   tap "Copy"
