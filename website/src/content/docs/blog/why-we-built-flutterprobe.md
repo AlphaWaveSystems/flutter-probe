@@ -89,4 +89,4 @@ Every architecture involves trade-offs. Here are the ones we made consciously.
 
 FlutterProbe is under active development. Current priorities include expanding [AI test generation](/tools/ai-generation/) capabilities, deepening [visual regression testing](/advanced/visual-regression/), and improving the [VS Code extension](/tools/vscode/) for test authoring and debugging. The [ProbeScript language](/probescript/syntax/) continues to evolve based on real-world usage patterns.
 
-If you want to try it, start with the [installation guide](/getting-started/installation/). If you have an existing test suite, the [migration tool](/getting-started/migration/) converts from seven common test frameworks including `integration_test` and Patrol.
+If you want to try it, start with the [installation guide](/getting-started/installation/). If you have an existing test suite, [probe-convert](/tools/probe-convert/) converts Maestro, Gherkin, Robot Framework, Detox and Appium tests (seven source formats counting the three Appium languages) to ProbeScript.
