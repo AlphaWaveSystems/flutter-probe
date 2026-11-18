@@ -1,6 +1,6 @@
 # The agent and the standalone design libraries (`material_ui`, `cupertino_ui`)
 
-Status: proposal, for review. No code in this note. Issue: #852. Stopgap: #855.
+Status: proposal, for review. No code in this note. Issue: #852. Stopgap: #855 (merged). The wrapper fix of #860 is #861 (merged).
 
 ## The problem
 
@@ -144,7 +144,7 @@ Measured on the framework controls (Flutter 3.44.8, a widget test that walks eac
 2. **Keep the framework class reads as a cross-check** where they apply. If the class and the `Semantics` disagree, refuse, because one of
    them is not what the app shows.
 3. **Refuse when there is nothing to read.** (This also covers a related gap on main, issue #860: the enabled reader did not look below
-   the target, so a disabled button behind an id wrapper read as enabled; #861 fixes it with the framework classes now.) No class the agent knows, and no `Semantics` with the property: the step fails with "cannot be
+   the target, so a disabled button behind an id wrapper read as enabled; #861, merged, fixes it with the framework classes.) No class the agent knows, and no `Semantics` with the property: the step fails with "cannot be
    evaluated", as the stopgap does now. Never fall back to a default.
 4. **Routes through `ModalRoute`**, the tooltip selector through `SemanticsProperties.tooltip`, and the device view's interactive marking
    through `Semantics` `button`/`textField`/`toggled`/`checked`, plus `EditableText`.
