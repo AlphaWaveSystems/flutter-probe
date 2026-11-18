@@ -126,7 +126,6 @@ type RunOptions struct {
 	Files        []string // .probe files to run
 	Tags         []string // filter by tag
 	TestNames    []string // run only the tests with these names (composite tests too); nil runs every test
-	Watch        bool     // re-run on file change
 	Timeout      time.Duration
 	DryRun       bool   // parse only
 	Verbose      bool

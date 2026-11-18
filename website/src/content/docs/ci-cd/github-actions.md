@@ -44,7 +44,7 @@ jobs:
 
       - name: Install the probe CLI
         run: |
-          sudo curl --fail --silent --show-error --location -o /usr/local/probe \
+          sudo curl --fail --silent --show-error --location -o /usr/local/bin/probe \
             https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v0.27.0/probe-darwin-arm64
           sudo chmod +x /usr/local/bin/probe
 
@@ -92,7 +92,7 @@ jobs:
 
       - name: Install the probe CLI
         run: |
-          sudo curl --fail --silent --show-error --location -o /usr/local/probe \
+          sudo curl --fail --silent --show-error --location -o /usr/local/bin/probe \
             https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v0.27.0/probe-linux-amd64
           sudo chmod +x /usr/local/bin/probe
 
