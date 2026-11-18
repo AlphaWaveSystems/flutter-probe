@@ -45,8 +45,8 @@ mv probe-mcp-darwin-arm64 /usr/local/bin/probe-mcp
 ### Option C — `go install` (requires Go 1.26.10+)
 
 ```bash
-go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe@latest
-go install github.com/AlphaWaveSystems/flutter-probe/cmd/probe-mcp@latest   # optional
+go install github.com/alphawavesystems/flutter-probe/cmd/probe@latest
+go install github.com/alphawavesystems/flutter-probe/cmd/probe-mcp@latest   # optional
 ```
 
 This is a good option for CI environments that already have Go set up.
