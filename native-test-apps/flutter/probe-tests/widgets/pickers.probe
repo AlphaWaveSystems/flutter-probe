@@ -1,152 +1,173 @@
 # Needs the pickers build: flutter build apk --debug --dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=pickers (see the README).
 # What each test shows is also in docs/compat/MATRIX.md: a matrix cell is set only from a test that ran.
 #
-# A dropdown's items and a popup menu's items are in a route over the screen, and the route is still in the tree while it closes, so a step that
-# follows the tap that closes a menu waits with `wait until "..." disappears` before it asserts that the item is gone. The two menus differ when they open:
-# the items of a DropdownButton were seen at once after the tap in 13 of 13 runs, the items of a PopupMenuButton in 1 of 12 (measured on one emulator),
-# so every step that needs a popup item waits with `wait until "..." appears` first.
+# This suite asserts nothing about whether the items of a CLOSED DropdownButton are seen. A DropdownButton keeps its items in an IndexedStack, and the agent
+# treats the children of an IndexedStack that are not shown differently on Flutter 3.44.8 (not seen) and on Flutter 3.50.0 (seen): see the matrix section and
+# native-test-apps/flutter/test/indexed_stack_hidden_test.dart. So the tests below prove what they need through behaviour that is the same on both: a state
+# text that changes, a counter, a tap that reaches or does not reach another widget. The items of a PopupMenuButton exist only while its menu is open.
 #
-# A state text such as "Action: Copy" contains the name of an item, and a text selector matches a part of a text: after a choice, wait for an item that is
-# NOT the one chosen (`wait until "Paste" disappears` after "Cut" or "Copy").
+# A menu is a route: `wait for animations to end` waits for it to open or to close.
+# A state text such as "Action: Copy" contains the name of an item, and a text selector matches a part of a text: after a choice, wait for the animations, not
+# for an item to disappear.
 
 before each test
   restart the app
   # Right after a restart the agent can answer while the screen is still being built (issue #793): wait for the screen's last element with an id.
   wait until #wf_icon_menu_state appears
 
-test "a dropdown shows its hint, opens by its id, and its items are seen"
+test "a dropdown shows its hint, opens by its id, and an item is chosen"
   see "Pick a color"
   see "Color: none"
   tap #wf_dropdown
-  see "Red"
-  see "Green"
-  see "Blue"
+  wait for animations to end
+  tap "Red"
+  see "Color: Red"
 
-test "a dropdown opens by a tap on its hint text"
+test "a dropdown opens by a tap on its hint text, and an item is chosen"
   tap "Pick a color"
-  wait until "Blue" appears
-  see "Green"
-
-test "choosing an item sets the value, the button shows it and the menu closes"
-  tap #wf_dropdown
+  wait for animations to end
   tap "Green"
   see "Color: Green"
-  wait until "Blue" disappears
-  see "Green"
-  don't see "Pick a color"
+
+test "choosing an item sets the value and the button shows it"
+  tap #wf_dropdown
+  wait for animations to end
+  tap "Green"
+  wait for animations to end
+  see "Color: Green"
+  see "Item taps: 1"
 
 test "a dropdown is reopened and another item is chosen"
   tap #wf_dropdown
+  wait for animations to end
   tap "Green"
-  wait until "Blue" disappears
+  wait for animations to end
   tap #wf_dropdown
-  wait until "Blue" appears
+  wait for animations to end
   tap "Blue"
+  wait for animations to end
   see "Color: Blue"
-  wait until "Red" disappears
+  see "Item taps: 2"
 
 test "with an item chosen, a tap on its name in the open menu hits the menu item, not the button under it"
   tap #wf_dropdown
+  wait for animations to end
   tap "Green"
-  wait until "Blue" disappears
+  wait for animations to end
   see "Item taps: 1"
   tap #wf_dropdown
-  wait until "Blue" appears
+  wait for animations to end
   tap "Green"
-  wait until "Blue" disappears
+  wait for animations to end
   see "Item taps: 2"
   see "Color: Green"
 
-test "go back closes an open dropdown without choosing"
+test "go back closes an open dropdown without choosing, and the page answers again"
   tap #wf_dropdown
-  wait until "Blue" appears
+  wait for animations to end
   go back
-  wait until "Blue" disappears
+  wait for animations to end
   see "Color: none"
   see "Item taps: 0"
-
-test "the page under an open dropdown is still seen"
-  tap #wf_dropdown
-  wait until "Blue" appears
-  see "Color: none"
-  see "Action: none"
+  tap "Actions"
+  wait for animations to end
+  tap "Cut"
+  see "Action: Cut"
 
 test "a tap on a button under an open dropdown lands on the barrier: the menu closes and the button is not pressed"
   tap #wf_dropdown
-  wait until "Blue" appears
+  wait for animations to end
   tap "Actions"
-  wait until "Blue" disappears
-  don't see "Cut"
+  wait for animations to end
   see "Action: none"
+  see "Color: none"
   tap "Actions"
-  wait until "Cut" appears
+  wait for animations to end
+  tap "Cut"
+  see "Action: Cut"
 
-test "a tap on a disabled dropdown opens nothing, with the id on the control and on a wrapper"
+test "a tap on a disabled dropdown opens nothing, with the id on the control and on a wrapper: the page still answers"
   tap #wf_dropdown_off
-  don't see "Spare"
+  wait for animations to end
   tap #wf_dropdown_off_w
-  don't see "Extra"
-  see "Locked"
-  see "Pinned"
-
-test "a popup menu opens by a tap on its child text, and an item is chosen"
+  wait for animations to end
   tap "Actions"
-  wait until "Cut" appears
+  wait for animations to end
+  tap "Copy"
+  see "Action: Copy"
+
+test "a popup menu opens by its child text, and an item is chosen"
+  tap "Actions"
+  wait for animations to end
   see "Copy"
   see "Paste"
   tap "Copy"
+  wait for animations to end
   see "Action: Copy"
-  wait until "Paste" disappears
 
 test "a popup menu opens by its id"
   tap #wf_popup
-  wait until "Paste" appears
+  wait for animations to end
   tap "Paste"
+  wait for animations to end
   see "Action: Paste"
-  wait until "Cut" disappears
 
 test "a popup menu with the default icon opens by its tooltip and by its id"
   tap "More options"
-  wait until "Rename" appears
+  wait for animations to end
   tap "Delete"
+  wait for animations to end
   see "Icon menu: Delete"
-  wait until "Rename" disappears
   tap #wf_popup_icon
-  wait until "Rename" appears
+  wait for animations to end
   tap "Rename"
+  wait for animations to end
   see "Icon menu: Rename"
 
 test "go back closes an open popup menu without choosing"
   tap "Actions"
-  wait until "Paste" appears
+  wait for animations to end
   go back
-  wait until "Paste" disappears
+  wait for animations to end
   see "Action: none"
+  tap "Actions"
+  wait for animations to end
+  tap "Paste"
+  see "Action: Paste"
 
 test "a tap outside an open popup menu closes it without choosing"
   tap "Actions"
-  wait until "Paste" appears
+  wait for animations to end
   tap "Action: none"
-  wait until "Paste" disappears
+  wait for animations to end
   see "Action: none"
+  tap "Actions"
+  wait for animations to end
+  tap "Cut"
+  see "Action: Cut"
 
 test "the page under an open popup menu is still seen"
   tap "Actions"
-  wait until "Cut" appears
+  wait for animations to end
   see "Icon menu: none"
   see "Color: none"
 
 test "the same popup item is chosen twice"
   tap "Actions"
-  wait until "Cut" appears
+  wait for animations to end
   tap "Copy"
-  wait until "Paste" disappears
+  wait for animations to end
   tap "Actions"
-  wait until "Cut" appears
+  wait for animations to end
   tap "Copy"
+  wait for animations to end
   see "Action: Copy"
 
-test "a tap on a disabled popup menu opens nothing"
+test "a tap on a disabled popup menu opens nothing: the page still answers"
   tap #wf_popup_off
-  don't see "Never shown"
+  wait for animations to end
   see "Disabled menu"
+  tap "Actions"
+  wait for animations to end
+  tap "Cut"
+  see "Action: Cut"

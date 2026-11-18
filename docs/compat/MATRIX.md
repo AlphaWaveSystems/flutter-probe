@@ -13,7 +13,7 @@ Cells: *find* (select by text, id or type), *tap*, *type* (enter text), *scroll*
 | Buttons | `ElevatedButton`, `TextButton`, `IconButton`, `CupertinoButton` | see below | see below | n/a | see below (scroll) | see below | `buttons` screen | `probe-tests/widgets/buttons.probe` |
 | Text input | `TextField`, `TextFormField`, `CupertinoTextField` | see below | see below | see below | see below (scroll) | see below | `textinput` screen | `probe-tests/widgets/textinput.probe` |
 | Selection controls | `Checkbox`, `Switch`, `Radio`, `Slider`, `CupertinoSwitch` | see below | see below | n/a | see below (scroll) | see below | `selection` screen | `probe-tests/widgets/selection.probe` |
-| Pickers and menus | `DropdownButton`, `PopupMenuButton`, `DatePickerDialog`, `CupertinoPicker` | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed | not assessed |
+| Pickers and menus | `DropdownButton`, `PopupMenuButton`, `DatePickerDialog`, `CupertinoPicker` | see below (`DropdownButton`, `PopupMenuButton`; `DatePickerDialog`, `CupertinoPicker` not assessed) | see below | not assessed | not assessed | see below | `pickers` screen | `probe-tests/widgets/pickers.probe` |
 | Lists and scrolling | `ListView`, `GridView`, `SingleChildScrollView`, `Scrollbar`, `PageView` | see below (`PageView` not assessed) | see below | n/a | see below | see below | `lists` screen | `probe-tests/widgets/lists.probe` |
 | Dialogs and sheets | `AlertDialog`, `BottomSheet`, `SnackBar`, `CupertinoAlertDialog` | see below | see below | n/a | n/a | see below | `dialogs` screen | `probe-tests/widgets/dialogs.probe` |
 | Navigation | `AppBar`, `NavigationBar`, `TabBar`, `Drawer`, `Navigator` | see below (`AppBar`, `Navigator` only) | see below | n/a | see below (scroll) | see below | `navigation` screen | `probe-tests/widgets/navigation.probe` |
@@ -265,6 +265,35 @@ Measured on Flutter 3.44.8 with the agent from main, on `Compat-Pixel-API35` (An
 
 Not covered by the screen: `Dismissible` (a swipe to dismiss), `Draggable` and `DragTarget`, `onPanUpdate` and other drags, `Listener` (raw pointer events), `onTapDown`/`onTapUp` without `onTap`, `HitTestBehavior` on an empty area, and physical devices. Flutter 3.50.0 was not run for this family.
 
+### Pickers and menus: DropdownButton and PopupMenuButton (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=pickers`, `probe-tests/widgets/pickers.probe`)
+
+Measured on Flutter 3.44.8 and Flutter 3.50.0, on the Android emulator `ProbeWebViewSpike` (Android 15, API 35), with the agent of `main` at `15fba797`: the suite (16 tests) passed 16 of 16 on each build, and the 11 variants that must fail (`probe-tests/negative/pickers.probe.expect-fail`) failed on each, every one at its own step with the message in its comment. The suite asserts nothing about whether the items of a **closed** `DropdownButton` are seen (finding 3), so it gives the same result on both versions.
+
+| Widget (fixture id) | Step | Result |
+|---|---|---|
+| `DropdownButton` with a hint (`wf_dropdown`) | `tap #wf_dropdown` and `tap "Pick a color"` (the hint) open the menu; `tap "Red"` chooses an item | pass (`Color: Red`) |
+| the same | reopen, choose another; the value shows in the button; `Item taps` counts every tap on a menu item | pass |
+| the same, with an item already chosen | `tap "Green"` in the open menu while the button also shows "Green" | pass: the tap reaches the **menu item** (the counter goes up), not the button under it |
+| the same | `go back` closes the open menu without choosing; the page answers again | pass |
+| a `PopupMenuButton` under an open dropdown (`wf_popup`) | `tap "Actions"` while the dropdown is open | pass: the tap lands on the **barrier**: the menu closes and the button is not pressed (`Action: none`); a second tap opens the popup menu |
+| a disabled `DropdownButton`, the id on the control (`wf_dropdown_off`) and on a wrapper (`wf_dropdown_off_w`) | `tap` | pass: nothing opens and the page still answers |
+| the same | `see #wf_dropdown_off is disabled` | **fail**: the agent answers "is enabled" (a known gap, issue #864); the variant is in the negative file as a gap |
+| `PopupMenuButton` with a text child (`wf_popup`) | `tap "Actions"` or `tap #wf_popup`, then `tap` an item | pass (`Action: Copy`) |
+| `PopupMenuButton` with the default icon and a tooltip (`wf_popup_icon`) | `tap "More options"` (the tooltip) or `tap #wf_popup_icon`, then an item | pass (`Icon menu: Rename`) |
+| a popup menu, open | `go back`; a `tap` outside; the page under it is still seen; the same item twice | pass |
+| a disabled `PopupMenuButton` (`wf_popup_off`) | `tap` | pass: nothing opens |
+| the same | `see #wf_popup_off is disabled` | **fail**: "is enabled" (issue #864) |
+| a `DropdownButton` or a `PopupMenuButton` | `see #id contains "<its text>"` | **fail**: it reads "" (the agent reads the text of the matched widget itself, and a button that holds a `Text` is not one: read it by its text, `see "Pick a color"`) |
+
+**Findings.**
+- **A menu is a route, and the agent finds it by its texts.** A tap that opens one is followed by `wait for animations to end` in the suite, which waits for the menu to open or close; the items of a `PopupMenuButton` exist only while its menu is open.
+- **A tap on a widget under an open menu lands on the barrier** (the same as for a dialog): the menu closes and the widget is not pressed.
+- **On Flutter 3.50.0 the agent sees the children of an `IndexedStack` that are not shown, and so the items of a closed `DropdownButton`** (a `DropdownButton` keeps its items in an `IndexedStack`): `see "Blue"` passes on a closed dropdown and `don't see "Blue"` fails; on Flutter 3.44.8 it is the other way round. The agent ignores a widget behind an `Offstage` or a `Visibility(visible: false)`; 3.44.8 wraps the children that are not shown in a `Visibility(visible: false)`, 3.50.0 does not. **Issue #900**, with the reproduction and the ancestors of the hidden child. `native-test-apps/flutter/test/indexed_stack_hidden_test.dart` pins the behaviour of each version (run by hand: it passes on both today and fails, for the newer one, when the agent is fixed). On the device it shows in the failure message of the negative `N6`: its list of visible texts names "Red", "Green" and "Blue" on 3.50.0 and not on 3.44.8.
+- **`is disabled` does not read these controls** (issue #864): a disabled `DropdownButton` and a disabled `PopupMenuButton` read as enabled, the id on the control or on a wrapper. The comment on that issue has the measurement of `is enabled` passing on them.
+- **`see #id contains` reads the text of the matched widget only**, so it reads "" for these controls.
+
+Not covered by the screen: `DropdownMenu` (it takes text), `DatePickerDialog` and `showTimePicker`, `CupertinoPicker` and `CupertinoDatePicker`, `MenuAnchor` and `MenuBar`, a popup menu long enough to scroll, nested menus, checked and radio items, keyboard navigation and type-ahead, iOS, a physical device and other API levels.
+
 ### WebView content (`native-test-apps/flutter-webview`, `probe-tests/webview.probe`)
 
 An Android app with a `webview_flutter` 4.14.1 `WebViewWidget` that shows `assets/page.html` (the page of `native-test-apps/android-webview`, kept equal by a test) from the app's own assets, next to
@@ -310,6 +339,8 @@ packages the Flutter SDK pins itself (`test_api`, `matcher` and others), not in 
 the table.
 
 **Scroll** (the section above) was run as five builds by each Flutter (3.50.0 in a scratch copy with a private SDK, 3.44.8 as above) on the emulator `ProbeWebViewSpike` (Android 15, API 35), with the agent of `main` at `42e0c67c`: every positive suite passed on each build (Selection controls 6 tests, Text input 10, Buttons 8, Navigation 5, Text and display 10), and every negative file failed all its tests (2, 10, 10, 7 and 16), each at its own step. The runs were done twice: the first round (agent at `ceda5559`, a fixed 1200 dp space) passed everywhere too, and was repeated after a review changed the space to a screen height plus 600 dp and after #855 landed; this section counts the second round. In both rounds **no test failed in `before each test`**: 84 restarts on each build, 168 in all per round; at the rate of issue #823, about 1 in 25, about 7 failures would be expected per round, and none happened. The runs were one suite at a time on a no-window emulator and the load was not measured, so this does not show that the failure is gone or why it did not occur. In the first round one run of the Selection negative file had to be repeated because that file had no `before each test` block (the tests ran without a restart, 105 ms each); `scripts/negative_suites_test.go` now fails on a family suite or a negative file without that block. Not run: the agent of `main` after #861 (a later change to how `is enabled` reads a wrapped control; it does not touch these screens' steps beyond `is checked` on the checkbox, which the second round ran with the agent of #855).
+
+**Pickers and menus** were run on a build by each Flutter (`--dart-define=PROBE_AGENT=true --dart-define=PROBE_FIXTURE_WIDGETS=pickers`; the 3.50.0 build in a scratch copy with a private SDK) on the emulator `ProbeWebViewSpike` (Android 15, API 35), agent port 5605, with the agent of `main` at `15fba797`: `pickers.probe` 16 of 16 and the negative file 0 passed, 11 failed on each build, each negative at its own step. 54 `restart the app` steps (27 on each build) and none failed in `before each test`; at the rate of issue #823, about 1 in 25, about 2 would be expected, and the run was one suite at a time on a no-window emulator with the load not measured, so this does not show that the failure is gone. Not run: iOS, a physical device, another API level, other screen sizes or text scales.
 
 ## Unsupported
 
