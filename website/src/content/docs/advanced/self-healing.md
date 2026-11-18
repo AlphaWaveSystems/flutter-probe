@@ -1,68 +1,42 @@
 ---
-title: Self-Healing Selectors
-description: AI-powered selector recovery using fuzzy matching against the widget tree.
+title: When a Selector Breaks
+description: What FlutterProbe does when a selector no longer matches. It lists what was on screen, can propose a replacement for you to apply, and never repairs a selector while a test runs.
 ---
 
-FlutterProbe includes a self-healing system that can recover from broken selectors by fuzzy-matching against the live widget tree. When a selector fails to find its target, the AI module tries alternative strategies before giving up. A failed step can also get an AI-proposed replacement selector, shown in the JSON report with `probe test --ai-heal` ([AI selector proposals](https://flutterprobe.dev/tools/ai/#selector-proposals-for-failed-steps)).
+FlutterProbe does **not** repair a selector while a test runs. A step such as `tap "Submit"` that finds no matching widget waits for its timeout and then fails. Nothing is substituted, retried with another selector or written back to your file. What FlutterProbe gives you is help to find the new selector quickly.
 
-## How It Works
+## What a failed step reports
 
-When a selector like `tap "Submit"` fails to find a matching widget, the self-healing module:
-
-1. Dumps the current widget tree
-2. Runs multiple fuzzy matching strategies against the tree
-3. If a confident match is found, the command proceeds with the recovered selector
-4. The recovery is logged so you can update the test later
-
-## Matching Strategies
-
-The system uses four strategies, evaluated in order of confidence:
-
-### 1. Text Fuzzy Match
-
-Finds widgets with similar text content using string similarity scoring.
-
-- `"Submitt"` matches `"Submit"` (typo recovery)
-- `"Sign in"` matches `"Sign In"` (case variation)
-
-### 2. Key Partial Match
-
-Finds widgets whose `ValueKey` partially matches the selector.
-
-- `#login` matches a widget with key `loginButton`
-- `#submit` matches a widget with key `submitForm`
-
-### 3. Type + Position Match
-
-Finds widgets by type and position when text/key matching fails.
-
-- Matches the Nth widget of a given type in the tree
-- Useful when widget text has changed but the structure remains the same
-
-### 4. Semantic Match
-
-Uses semantic labels and accessibility information to find widgets.
-
-- Matches against `Semantics` labels in the widget tree
-- Falls back to tooltip and hint text
-
-## Configuration
-
-Self-healing is enabled by default. The system only attempts recovery when a standard selector lookup fails — there is no performance overhead for passing selectors. The AI proposal is separate: it runs only with `probe test --ai-heal` and an `ai:` block ([AI selector proposals](https://flutterprobe.dev/tools/ai/#selector-proposals-for-failed-steps)).
-
-## Logging
-
-When a selector is healed, the test output includes a warning:
+When a step times out, the error ends with the texts and widget keys that were visible on screen at that moment:
 
 ```
-  ⚠ Selector "Submitt" healed → matched "Submit" (text_fuzzy, confidence: 0.92)
+line 42: wait until "Goal saved" appears timed out after 30s (context deadline exceeded) — visible texts: ["History", "Settings"], keys: ["tab_history"]
 ```
 
-This tells you which strategy was used and the confidence score, so you can update the test to use the correct selector.
+A failed `tap` or `see` carries the same ` — visible texts: [...], keys: [...]` ending. The lists are read from the app, so a typo, a changed label or a renamed key is usually visible in the message. An app built with an older agent may not report them.
 
-## Limitations
+## A proposed replacement in the report
 
-- Self-healing adds latency when a selector fails (widget tree dump + matching)
-- Low-confidence matches are rejected to prevent false positives
-- The system cannot recover from structural changes where the target widget has been removed entirely
-- Works best when selectors are close to correct (typos, minor text changes, key renames)
+```bash
+probe test tests/ --ai-heal --format json -o reports/results.json
+```
+
+With an `ai:` block in `probe.yaml`, `--ai-heal` asks the configured model for one replacement selector for each failed selector step, chosen from the texts and keys that were on screen. The proposal is in the JSON report as `selector_proposal`. It is advisory: it is not applied to the test file, not verified against the app, and it changes no result and no exit code. See [Selector proposals for failed steps](/tools/ai/#selector-proposals-for-failed-steps) for the fields, the limits and what leaves your machine.
+
+## Suggestions in Studio
+
+Studio shows a suggestion under a failed step. Each one is a button you press; nothing is applied on its own, and none of them changes the result of the run.
+
+- **Use the text on screen** (rule-based): when the screen shows exactly one text that is the same text written another way (a different case, spacing or Unicode form, such as `Sign in` against `Sign In`), the Results pane offers the step with that text.
+- **Insert before the step** (rule-based): adds a `wait until "X" appears` line above the failed step.
+- **Suggest a fix** (AI provider): one ProbeScript line for the failed step, on an advisory card, with **Replace the line**.
+
+See [Studio](/tools/studio/) for the exact conditions and what Studio checks before it edits the buffer.
+
+## What stays your job
+
+Update the test. The proposals and suggestions point at a likely replacement; a flow that was restructured (two screens merged, a step removed) needs a person to rewrite it. For selectors that survive UI changes, prefer a `ValueKey` and the `#key` form over visible text.
+
+## Not available
+
+`probe heal` is not implemented. An earlier build printed suggestions that were not read from your files and changed nothing, so the command now refuses with an error that points to `--ai-heal`.
