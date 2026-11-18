@@ -99,7 +99,7 @@ Flakiness is highly dependent on test implementation quality. These numbers refl
 - **ProbeScript readability.** Non-developers can read, write, and review tests. This changes team dynamics around test ownership.
 - **Performance.** No recompilation between test files and direct in-app control. We have measured this against Maestro (about 2x faster median suite time, [benchmark](/blog/flutterprobe-vs-maestro-benchmark/)), not against Patrol or `integration_test`.
 - **CI/CD tooling.** Built-in sharding, JUnit/HTML reporting, and [five cloud device farm providers](/tools/cloud-farms/) (implemented, not yet verified on a live account) are available.
-- **Self-healing selectors.** Minor UI changes (reordering widgets, changing container types) do not break tests. This materially reduces maintenance effort.
+- **Proposed selector fixes.** A failed step lists the texts and keys that were on screen, and with `--ai-heal` the JSON report carries an advisory replacement selector. Nothing is applied for you, so a changed UI still means updating the test, with a lead on what to change.
 - **Visual regression.** Built-in screenshot comparison catches unintended UI changes that functional tests miss. See [visual regression docs](/advanced/visual-regression/).
 
 ## Honest Limitations of FlutterProbe
@@ -131,4 +131,4 @@ No tool is perfect. Here is where FlutterProbe has real limitations:
 
 These recommendations are not absolute. Evaluate based on your specific project size, team composition, CI infrastructure, and device coverage requirements. You can also combine tools — use `integration_test` for a small smoke suite and FlutterProbe for comprehensive regression testing.
 
-For migration between tools, see the [migration guide](/getting-started/migration/). For a broader look at the testing landscape, see the [Flutter UI testing overview](/comparisons/flutter-ui-testing/).
+For migration from other tools, see [probe-convert](/tools/probe-convert/), which reads Maestro, Gherkin, Robot Framework, Detox and Appium tests (not `integration_test` or Patrol). For a broader look at the testing landscape, see the [Flutter UI testing overview](/comparisons/flutter-ui-testing/).

@@ -36,7 +36,7 @@ FlutterProbe uses a split architecture: a Go CLI runs on the host machine and se
 test "user grants camera permission and takes photo"
   open the app
   tap "Take Photo"
-  grant permission camera
+  allow permission "camera"
   see "Photo Preview"
 ```
 
@@ -48,7 +48,7 @@ The Go CLI handles device management, test orchestration, reporting, and cloud-f
 |---|---|---|
 | Test language | Dart | ProbeScript (plain English) |
 | Where tests live | Inside app project | Separate `.probe` files |
-| Test runner | Flutter test runner | Go CLI (`probe run`) |
+| Test runner | Flutter test runner | Go CLI (`probe test`) |
 | Device communication | In-process | WebSocket + JSON-RPC |
 | Command round-trip | In-process | Over WebSocket |
 | App compilation | Tests compile with app | Agent compiles with app; tests do not |
@@ -71,7 +71,7 @@ This trade-off is deliberate. ProbeScript optimizes for readability by non-devel
 | Native dialog handling | Yes (NativeAutomator) | Yes (built-in commands) |
 | Widget-tree access | Yes (in-process) | Yes (via Dart agent) |
 | Custom finders | `$('text')` syntax | Text, key, semantic label, type |
-| Self-healing selectors | No | [Yes](/advanced/self-healing/) |
+| Advisory selector proposals on failure | No | [Yes](/advanced/self-healing/) |
 | Visual regression | No | [Yes](/advanced/visual-regression/) |
 | Test recording | No | [Yes](/tools/recording/) |
 | HTTP mocking | Manual setup | Built-in |
@@ -80,7 +80,7 @@ This trade-off is deliberate. ProbeScript optimizes for readability by non-devel
 | Parallel execution | No | `--parallel`, `--shard` |
 | Cloud farm support | Limited | 5 providers implemented, not yet verified on a live account ([details](/tools/cloud-farms/)): BrowserStack, AWS Device Farm, Sauce Labs, LambdaTest, Firebase Test Lab (deprecated by Google) |
 | CI reporting | Manual | HTML + JUnit built-in |
-| Migration tooling | No | [7 formats](/tools/probe-convert/) (Maestro, Gherkin, Detox, Appium, Robot, integration_test, Patrol) |
+| Migration tooling | No | [7 source formats](/tools/probe-convert/): Maestro, Gherkin, Robot Framework, Detox and Appium (Python, Java/Kotlin, JavaScript). None from Patrol |
 | VS Code extension | No | [Yes](/tools/vscode/) (syntax highlighting, CodeLens, test explorer) |
 | Data-driven tests | Manual (Dart loops) | [Built-in](/probescript/data-driven/) (CSV, JSON) |
 | Hooks | Dart setUp/tearDown | [before all/each, after all/each, on failure](/probescript/hooks/) |
@@ -102,13 +102,18 @@ FlutterProbe's CLI generates reports natively. A typical [GitHub Actions workflo
 
 ```yaml
 - name: Run E2E tests
-  run: probe run tests/ --device emulator-5554 --report junit --report html
+  run: probe test tests/ --device emulator-5554 --format json -o reports/results.json
+
+- name: Make the HTML report
+  if: always()
+  run: probe report --input reports/results.json -o reports/report.html
 
 - name: Upload report
+  if: always()
   uses: actions/upload-artifact@v4
   with:
     name: test-report
-    path: probe-reports/
+    path: reports/
 ```
 
 Reports include screenshots on failure, step-by-step timing, and pass/fail summaries. The [reports documentation](/ci-cd/reports/) covers all output formats.
@@ -120,25 +125,19 @@ Reports include screenshots on failure, step-by-step timing, and pass/fail summa
 - Your entire team writes Dart and prefers staying in one language.
 - You need native automation but want to stay close to the standard Flutter test API.
 - Your test suite is small to medium (under 50 tests) and runs on local devices.
-- You do not need visual regression, self-healing selectors, or cloud-farm execution.
+- You do not need visual regression, advisory selector proposals, or cloud-farm execution.
 
 **Choose FlutterProbe if:**
 
 - Non-developers (QA, product, design) need to read or write tests.
 - You run tests on cloud device farms or need parallel execution across multiple devices.
-- You want visual regression testing and self-healing selectors to reduce maintenance.
+- You want visual regression testing and advisory selector proposals to reduce maintenance.
 - You are migrating from another framework (Maestro, Detox, Appium, Gherkin) and want automated conversion.
 - Fast iteration matters -- no recompilation when tests change.
 
 ## Migrating from Patrol to FlutterProbe
 
-If you have existing Patrol tests, FlutterProbe's [probe-convert](/tools/probe-convert/) tool can translate them into ProbeScript:
-
-```bash
-probe convert --from patrol --input tests/patrol/ --output tests/probe/
-```
-
-The converter handles `patrolTest` blocks, `$()` finders, `NativeAutomator` calls, and common assertions. Review the output for edge cases, then run the converted tests with `probe run`.
+There is no converter for Patrol tests: [probe-convert](/tools/probe-convert/) reads Maestro, Gherkin, Robot Framework, Detox and Appium suites, not Dart. A Patrol suite is rewritten by hand as `.probe` files, one flow at a time, and run with `probe test`.
 
 ## Getting Started with FlutterProbe
 

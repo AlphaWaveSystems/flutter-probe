@@ -11,7 +11,7 @@ description: Complete reference for all probe CLI commands and flags.
 | `probe validate` | Check `probe.yaml` and the `probe_version` pin without connecting to a device. Exits non-zero when a check fails; `--format json` prints the report. Run it in CI before `probe test` |
 | `probe doctor` | Check that `probe.yaml`, the `tests/` folder, the Flutter SDK, the platform tools (`adb`, `xcrun`) and the visible devices are ready for `probe test`. Says how to fix what is missing and changes nothing. Exits non-zero only when `probe.yaml` or `tests/` is missing. `--format json` prints the report |
 | `probe test [path]` | Run `.probe` test files |
-| `probe lint [path]` | Validate `.probe` files without running them: syntax errors, steps and recipe calls that resolve to nothing, and selectors that can never match fail the command; unresolved placeholders and count or zero-state text checks warn |
+| `probe lint [path]` | Validate `.probe` files without running them: syntax errors, steps and recipe calls that resolve to nothing, and selectors that can never match fail the command; unresolved placeholders, count or zero-state text checks and a recipe name that a call cannot reach warn |
 | `probe perf trend` / `probe perf compare` | Show a measured number over past runs, or compare two baseline files. See [Performance testing](/advanced/performance/) |
 | `probe device list` | List connected devices/simulators |
 | `probe device view` | Interactive device view over a local WebSocket (preview) |
@@ -83,7 +83,6 @@ probe test [path] [flags]
 | `--clear-data-before-each-test` | `false` | Wipe the app's data and relaunch before every test (also `defaults.clear_data_before_each_test`). Asked once for each device of the run (a parallel run: once in each lane); `--yes` or the question answers it, and on a simulator or emulator `probe prefs set clear-data-without-asking on` answers the question for you. A parallel run (`--devices`) needs `--yes` (its lanes cannot ask) and logs once what it will wipe. The clear and relaunch count against `--test-timeout`. `=false` overrides a `probe.yaml` that turns it on |
 | `--no-grant-on-clear` | `false` | After `clear app data` keep runtime permissions revoked even with `--yes`, so a test can see the first-run permission dialog. A parallel or composite run follows it too |
 | `-y, --yes` | `false` | Auto-confirm destructive ops + auto-grant permissions. In a parallel or composite run it is the only consent for `clear app data`: without it a device is wiped only when the person has allowed simulators and emulators in `probe prefs` and the device is verified as one. A refused wipe fails with the hint to pass `--yes` (on an iOS simulator notifications cannot be granted this way: pass `--grant notifications` to answer the alert) |
-| `--watch` | `false` | Watch mode — re-run on file changes |
 | `--video` | `false` | Enable video recording per test |
 | `--video-resolution` | `720x1280` | Android screenrecord resolution |
 | `--video-framerate` | `2` | Video framerate (fps) |
@@ -168,6 +167,7 @@ Lint checks the references a run would resolve, without running a step, and fail
 It warns, without failing, when:
 
 - A `<name>` placeholder is not an example column, a recipe parameter, a value stored with `store` or `read ... with ai`, one of the runtime values `clipboard`, `response.status` or `response.body`, or a `<random.*>` generator. A run leaves such a placeholder in the text as written.
+- A recipe is declared with a name that a call cannot reach: it starts with a ProbeScript keyword (`recipe "log in as"`, read as the `log` step plus a stray call), or with a filler word the parser drops from a step (`on the home screen`, looked up as `home screen`), or it has capital letters (a call is looked up in lower case). Such a call fails as an unknown step, so the recipe can never run; start the name with another word (`sign in as`).
 - A `use` names a file that does not exist. A run only needs that file when a call uses one of its recipes, and such a call is reported as an unknown step.
 - A `see` or `wait until ... appears` whose text is a count or a zero state (`see "0 items"`, `wait until "No items" appears`) and has no `matching` pattern, because a substring match also passes on "10 items". Anchor the pattern for an exact check: `see "0 items" matching "^0 items$"`. A `matching` pattern anchored at both ends (`^...$`) silences the warning; any other pattern is still a substring match and is still flagged.
 
