@@ -18,7 +18,7 @@ Cells: *find* (select by text, id or type), *tap*, *type* (enter text), *scroll*
 | Dialogs and sheets | `AlertDialog`, `BottomSheet`, `SnackBar`, `CupertinoAlertDialog` | see below | see below | n/a | n/a | see below | `dialogs` screen | `probe-tests/widgets/dialogs.probe` |
 | Navigation | `AppBar`, `NavigationBar`, `TabBar`, `Drawer`, `Navigator` | see below (`AppBar`, `Navigator` only) | see below | n/a | see below (scroll) | see below | `navigation` screen | `probe-tests/widgets/navigation.probe` |
 | Layout and containers | `Container`, `Row`, `Column`, `Stack`, `Card`, `Opacity`, `Visibility`, `Offstage`, `IgnorePointer`, `AbsorbPointer` | see below (`Opacity`, `Visibility`, `Offstage`, `IgnorePointer`, `AbsorbPointer`, a covered `Stack` child; the others not assessed) | see below | n/a | not assessed | see below | `layout` screen | `probe-tests/widgets/layout.probe` |
-| Gestures | `GestureDetector`, `Dismissible`, `Draggable`, `InkWell` | not assessed | not assessed | n/a | not assessed | n/a | not assessed | not assessed |
+| Gestures | `GestureDetector`, `Dismissible`, `Draggable`, `InkWell` | see below (`GestureDetector`, `InkWell`; `Dismissible`, `Draggable` not assessed) | see below | n/a | n/a | see below | `gestures` screen | `probe-tests/widgets/gestures.probe` |
 | WebView content | an embedded web page (`webview_flutter`) | see below | see below | see below | not assessed | see below | `native-test-apps/flutter-webview` | `native-test-apps/flutter-webview/probe-tests/webview.probe` |
 
 ## Assessed widgets
@@ -244,6 +244,26 @@ Measured on Flutter 3.44.8 with the agent from main, on `Compat-Pixel-API35` (An
 - **`IgnorePointer` was the gap**: the hit stopped at the list's own scroll listener, an ancestor of the button, which `_hitState` took for a parent handling the tap, so there was no warning (issue #842, fixed in #846). The suite pins that the tap does nothing (`Ignored: 0`); with #846 the step also prints the warning, and `--fail-on-warning` fails it.
 
 Not covered by the screen: `Opacity` between 0 and 1, `AnimatedOpacity`, `Visibility` with `maintainInteractivity`, `ExcludeSemantics`, `ModalBarrier`, a widget partly covered, `ClipRect` clipping a child away, and `Container`, `Row`, `Column` and `Card` as layout (nothing to assess beyond their children). Flutter 3.50.0 was not run for this family.
+
+### Gestures: a text inside a gesture widget (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=gestures`, `probe-tests/widgets/gestures.probe`)
+
+Measured on Flutter 3.44.8 with the agent from main, on `Compat-Pixel-API35` (Android 15, API 35) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5): the suite (7 tests) passed 3 of 3 runs on each device, and the 6 variants that must fail (`probe-tests/negative/gestures.probe.expect-fail`) failed on both, each with the message in its comment; no restart failure (issue #823). Each handler counts in the state line, so a test shows which handler got the gesture. An emulator and a simulator only: no physical device was used.
+
+| Widget (fixture id) | Gesture | Result |
+|---|---|---|
+| `GestureDetector(onTap)` around a text (`wf_g_tap`) | `tap` by text and by `#id` | pass (`Tap: 1`) |
+| `InkWell(onTap)` around a text (`wf_g_ink`) | `tap` by text and by `#id` | pass (`Ink: 1`) |
+| `GestureDetector(onDoubleTap)` only (`wf_g_double`) | `double tap` | pass (`Double: 1`); a single `tap` does nothing and passes with no warning, as a person's single tap does nothing (the tap reached the detector) |
+| `GestureDetector(onLongPress)` only (`wf_g_hold`) | `long press` | pass (`Hold: 1`); a `tap` does not count as a long press |
+| a `GestureDetector` inside another (`wf_g_inner` in `wf_g_outer`) | `tap` on the inner text | pass: the inner one gets it (`Inner: 1`, `Outer: 0`), as Flutter's gesture arena decides |
+| `GestureDetector` with `onTap` and `onDoubleTap` (`wf_g_both`) | `tap`, then `double tap` | pass, with the finding below: `onTap` runs about 300 ms after the tap |
+| a `GestureDetector` inside a `Semantics` wrapper that carries the key (`wf_g_wrapper`) | `tap` by text and by `#id` | pass on the emulator and the simulator (`Wrapper: 2`); the earlier report that taps by id miss with this structure was on a physical device, which this run does not cover |
+
+**Findings.**
+- **A detector with both `onTap` and `onDoubleTap` runs `onTap` only after the double-tap timeout** (Flutter's `kDoubleTapTimeout`, 300 ms, `packages/flutter/lib/src/gestures/constants.dart`): a second tap could still come. `tap` returns before that, so a `see` right after the tap failed in 6 of 6 runs (3 on each device); `wait until "..." appears` passes. A test of such a widget must wait for the tap's result. (A person's tap on it is handled late too.)
+- **A tap on a text inside a gesture widget is a real pointer tap**, so Flutter's gesture arena decides who gets it: the inner of two nested detectors, the detector for the gesture that was made.
+
+Not covered by the screen: `Dismissible` (a swipe to dismiss), `Draggable` and `DragTarget`, `onPanUpdate` and other drags, `Listener` (raw pointer events), `onTapDown`/`onTapUp` without `onTap`, `HitTestBehavior` on an empty area, and physical devices. Flutter 3.50.0 was not run for this family.
 
 ### WebView content (`native-test-apps/flutter-webview`, `probe-tests/webview.probe`)
 
