@@ -60,3 +60,10 @@ test "tap on a FlutterLogo by its id reaches the GestureDetector around it"
   see "Taps: 0"
   tap #wf_logo
   see "Taps: 1"
+
+# Below the fold: a space of a screen height plus 600 dp and then one widget. A ListView builds only the children near the viewport, so the widget is not in the tree until a scroll reaches it.
+test "a text below the fold is not seen until a scroll reaches it, and scroll up comes back"
+  don't see "Bottom text"
+  scroll down until "Bottom text" appears
+  see "Bottom text: end of the list"
+  scroll up until "Order total: 42.00" appears
