@@ -6,15 +6,15 @@ Welcome to the FlutterProbe wiki. This documentation covers architecture details
 
 - [Architecture Overview](Architecture-Overview) — System components, communication flow, and design decisions
 - [Development Setup](Development-Setup) — How to build, test, and contribute
-- [ProbeScript Reference](ProbeScript-Reference) — Language syntax, commands, and patterns
+- [ProbeScript syntax](https://flutterprobe.dev/probescript/syntax/) — Language syntax, commands, and patterns
 - [iOS Integration Guide](iOS-Integration-Guide) — iOS-specific setup, known limitations, and workarounds
-- [Android Integration Guide](Android-Integration-Guide) — Android-specific setup and ADB usage
-- [CI/CD Integration](CI-CD-Integration) — Running FlutterProbe in CI pipelines
-- [Cloud Providers](Cloud-Providers) — BrowserStack, SauceLabs, AWS Device Farm, Firebase Test Lab, LambdaTest
+- [Android platform guide](https://flutterprobe.dev/platform/android/) — Android-specific setup and ADB usage
+- [CI/CD with GitHub Actions](https://flutterprobe.dev/ci-cd/github-actions/) — Running FlutterProbe in CI pipelines
+- [Device clouds](https://flutterprobe.dev/tools/cloud-farms/) — the providers the CLI implements (BrowserStack, SauceLabs, AWS Device Farm, Firebase Test Lab, LambdaTest and others) and which of them have been verified on a live account
 - [Composite Tests](Composite-Tests) — Multi-device coordinated testing
 - [Troubleshooting](Troubleshooting) — Common issues and solutions
-- [Release Process](Release-Process) — How to cut a release
-- [Security](Security) — Security practices and vulnerability reporting
+- [Release pipeline](https://github.com/AlphaWaveSystems/flutter-probe/blob/main/docs/ops/release-pipeline.md) — How a release is cut
+- [Security policy](https://github.com/AlphaWaveSystems/flutter-probe/security/policy) — Security practices and vulnerability reporting
 
 ## Studio
 
