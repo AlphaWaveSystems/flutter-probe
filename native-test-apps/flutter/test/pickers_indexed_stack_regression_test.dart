@@ -9,10 +9,10 @@ import 'package:probe_flutter_fixture/widget_families.dart';
 // What the agent does with the children of an IndexedStack that are not the shown one, and with the items of a closed DropdownButton (which keeps its items in
 // an IndexedStack): it does not see them, with Flutter 3.44.8 and with Flutter 3.50.0. Before the fix of issue #900 it saw them with Flutter 3.50.0: the agent
 // ignores a widget behind an `Offstage` or a `Visibility(visible: false)`, 3.44.8 wraps the children that are not shown in a `Visibility(visible: false)`, and
-// 3.50.0 does not (only `RenderIndexedStack` hides them there). The agent's own test of the rule is probe_agent/test/indexed_stack_hidden_test.dart; this one runs
-// it on the fixture's pickers screen and on a plain IndexedStack, through the same `see` the device suite uses.
+// 3.50.0 does not (only `RenderIndexedStack` hides them there). The agent's own test of the rule is probe_agent/test/indexed_stack_hidden_test.dart (added with
+// the fix, #901); this one runs the same check on the fixture's pickers screen and on a plain IndexedStack, through the same `see` the device suite uses.
 //
-// Run it BY HAND, once with each Flutter, with `flutter test test/indexed_stack_hidden_test.dart` in this folder; it needs no device, and CI does not run it (CI
+// Run it BY HAND, once with each Flutter, with `flutter test test/pickers_indexed_stack_regression_test.dart` in this folder; it needs no device, and CI does not run it (CI
 // runs the tests of probe_agent only).
 
 Future<bool> _passes(
