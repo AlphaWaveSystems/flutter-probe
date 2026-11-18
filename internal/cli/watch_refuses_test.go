@@ -19,7 +19,11 @@ func TestTestWatchFlagRefuses(t *testing.T) {
 			}
 			var errOut bytes.Buffer
 			testCmd.SetErr(&errOut)
-			err := runTestsAndReportError(testCmd, nil)
+			// A path that cannot be read: had runTests started, this would fail on the file (or the config), not on the flag.
+			err := runTestsAndReportError(testCmd, []string{"/nonexistent/probe-watch-test/x.probe"})
+			if err != errWatchNotImplemented {
+				t.Fatalf("err = %v: the refusal must be the flag's own, returned before runTests reads anything", err)
+			}
 			if !errors.Is(err, errWatchNotImplemented) {
 				t.Fatalf("err = %v, want errWatchNotImplemented", err)
 			}
