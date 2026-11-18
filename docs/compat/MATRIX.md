@@ -165,7 +165,7 @@ Not covered by the screen: `PageView` (a swipe), dragging a `Scrollbar` thumb, a
 
 ### Dialogs and sheets (`native-test-apps/flutter`, build flag `PROBE_FIXTURE_WIDGETS=dialogs`, `probe-tests/widgets/dialogs.probe`)
 
-Also measured on two named devices, with Flutter 3.44.8 and the agent from main: `Compat-Pixel-API35` (Android 15, API 35, `emulator-5590`) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5, simulator `A57AEE67-3473-4C20-BE25-8847C2A9D6BE`). The suite (12 tests) passed 3 of 3 runs on each device, and the 9 variants that must fail failed on both, each with the message in its comment, so the findings below hold on iOS too. No run had a restart failure (issue #823). The earlier runs below were on one emulator of another session, Android only.
+Also measured on two named devices, with Flutter 3.44.8 and the agent from main: `Compat-Pixel-API35` (Android 15, API 35) and `Compat-iPhone` (iPhone 17 Pro, iOS 26.5). The suite (12 tests) passed 3 of 3 runs on each device, and the 9 variants that must fail failed on both, each with the message in its comment, so the findings below hold on iOS too. No run had a restart failure (issue #823). The earlier runs below were on one emulator of another session, Android only.
 
 | Widget (fixture id) | find | tap | close | read | Result |
 |---|---|---|---|---|---|
