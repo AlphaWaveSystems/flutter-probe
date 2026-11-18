@@ -22,14 +22,20 @@ const snippetRoot = ".."
 var (
 	curlOut  = regexp.MustCompile(`curl\b[^\n]*?\s(?:-[A-Za-z]*o|--output)[ =]+("[^"]+"|'[^']+'|[^\s\\]+)`)
 	curlO    = regexp.MustCompile(`curl\b[^\n]*?\s-[A-Za-z]*O\b[^\n]*?(https?://\S+)`)
-	chmodX   = regexp.MustCompile(`chmod\s+(?:\+x|a\+x|755|0755)\s+((?:"[^"]+"|'[^']+'|[^\s;&|\\]+)(?:\s+(?:"[^"]+"|'[^']+'|[^\s;&|\\]+))*)`)
+	wgetOut  = regexp.MustCompile(`wget\b[^\n]*?\s(?:-[A-Za-z]*O|--output-document)[ =]*("[^"]+"|'[^']+'|[^\s\\]+)`)
+	chmodX   = regexp.MustCompile(`chmod\s+(?:-\w+\s+)*(?:[ugoa]*\+x|[0-7]{3,4})\s+((?:"[^"]+"|'[^']+'|[^\s;&|\\]+)(?:\s+(?:"[^"]+"|'[^']+'|[^\s;&|\\]+))*)`)
 	moveCopy = regexp.MustCompile(`\b(?:mv|cp|install)\s+(?:-\S+\s+)*("[^"]+"|'[^']+'|[^\s\\;&|]+)\s+("[^"]+"|'[^']+'|[^\s\\;&|]+)`)
 )
 
 func unquote(s string) string { return path.Clean(strings.Trim(s, `"'`)) } // ./probe and probe are one file
 
+var continuation = regexp.MustCompile(`\\[ \t]*\n[ \t]*`)
+
+// joinContinuations puts the lines of a command that ends in a backslash on one line, so a flag on the next line is seen.
+func joinContinuations(s string) string { return continuation.ReplaceAllString(s, " ") }
+
 // snippetBlocks splits text into the runs of lines a reader copies together: a fenced code block, or the lines of one
-// workflow step. A blank line, a fence or a new list item ends a block.
+// workflow step. A fence or a new workflow step ends a block; a blank line inside one does not.
 func snippetBlocks(text string) []string {
 	var blocks []string
 	var cur []string
@@ -41,9 +47,12 @@ func snippetBlocks(text string) []string {
 	}
 	for _, line := range strings.Split(text, "\n") {
 		trim := strings.TrimSpace(line)
-		if trim == "" || strings.HasPrefix(trim, "```") || strings.HasPrefix(trim, "- name:") || strings.HasPrefix(trim, "- uses:") {
+		if strings.HasPrefix(trim, "```") || strings.HasPrefix(trim, "- name:") || strings.HasPrefix(trim, "- uses:") {
 			flush()
 			continue
+		}
+		if trim == "" {
+			continue // a blank line inside a snippet does not end it
 		}
 		cur = append(cur, line)
 	}
@@ -53,8 +62,12 @@ func snippetBlocks(text string) []string {
 
 // chmodMismatches returns, for one snippet, the chmod targets that name a downloaded file from another path.
 func chmodMismatches(block string) []string {
+	block = joinContinuations(block)
 	var downloaded []string
 	for _, m := range curlOut.FindAllStringSubmatch(block, -1) {
+		downloaded = append(downloaded, unquote(m[1]))
+	}
+	for _, m := range wgetOut.FindAllStringSubmatch(block, -1) {
 		downloaded = append(downloaded, unquote(m[1]))
 	}
 	for _, m := range curlO.FindAllStringSubmatch(block, -1) {
@@ -148,6 +161,15 @@ func TestChmodMismatchCases(t *testing.T) {
 		{"remote file name with -O", "curl -LO https://x/probe-darwin-arm64\nchmod +x probe-darwin-arm64", 0},
 		{"two files, one chmod", "curl -LO https://x/probe-darwin-arm64 https://x/probe-mcp-darwin-arm64\nchmod +x probe-darwin-arm64 probe-mcp-darwin-arm64", 0},
 		{"quoted variable path agrees", "curl -fsSL -o \"$HOME/bin/probe\" https://x/probe\nchmod +x \"$HOME/bin/probe\"", 0},
+		{"a blank line between download and chmod", "sudo curl -fsSL -o /usr/local/probe https://x/probe\n\nsudo chmod +x /usr/local/bin/probe", 1},
+		{"-o on the continuation line", "sudo curl -fsSL \\\n  -o /usr/local/probe \\\n  https://x/probe\nsudo chmod +x /usr/local/bin/probe", 1},
+		{"wget -O to another directory", "sudo wget -qO /usr/local/probe https://x/probe\nsudo chmod +x /usr/local/bin/probe", 1},
+		{"wget --output-document", "wget --output-document=/opt/probe https://x/probe\nchmod +x /usr/local/bin/probe", 1},
+		{"wget and chmod agree", "wget -qO /usr/local/bin/probe https://x/probe\nchmod +x /usr/local/bin/probe", 0},
+		{"chmod u+x", "curl -fsSL -o /usr/local/probe https://x/probe\nchmod u+x /usr/local/bin/probe", 1},
+		{"chmod 755", "curl -fsSL -o /usr/local/probe https://x/probe\nchmod 755 /usr/local/bin/probe", 1},
+		{"chmod with a flag", "curl -fsSL -o /usr/local/probe https://x/probe\nchmod -v +x /usr/local/bin/probe", 1},
+		{"chmod ug+x agrees", "curl -fsSL -o /usr/local/bin/probe https://x/probe\nchmod ug+x /usr/local/bin/probe", 0},
 		{"no download in the snippet", "chmod +x ./scripts/run.sh", 0},
 		{"a chmod of an unrelated name", "curl -fsSL -o probe https://x/probe\nchmod +x ./gradlew", 0},
 	} {
