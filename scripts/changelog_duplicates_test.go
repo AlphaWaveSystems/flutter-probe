@@ -1,6 +1,7 @@
 package scripts
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -29,7 +30,7 @@ func duplicateBullets(text string) map[string][]int {
 			section = l
 		case inUnreleased && strings.HasPrefix(l, "- "):
 			if m := bulletTitle.FindStringSubmatch(l); m != nil {
-				key := section + "\x00" + m[1]
+				key := section + "\x00" + m[1] // by section: the same title in Added and in Fixed is two bullets
 				seen[key] = append(seen[key], i+1)
 			}
 		}
@@ -51,21 +52,42 @@ var knownDuplicates = map[string]string{
 	"`store text of css:\"#total\" in webview as total` reads text from a WebView into a variable (Android).":            "two revisions of one bullet; the owner of the WebView work decides which stays",
 }
 
+// duplicateProblems says what is wrong given the duplicates found and the known ones: a duplicate that is not known, and a known one that is gone.
+func duplicateProblems(dups map[string][]int, known map[string]string) []string {
+	var out []string
+	for title, at := range dups {
+		if _, ok := known[title]; !ok {
+			out = append(out, fmt.Sprintf("the bullet %q is in the Unreleased section %d times (lines %v): keep one", title, len(at), at))
+		}
+	}
+	for title := range known {
+		if _, still := dups[title]; !still {
+			out = append(out, fmt.Sprintf("%q is no longer duplicated: delete its entry from knownDuplicates", title))
+		}
+	}
+	return out
+}
+
 func TestTheUnreleasedChangelogHasNoDuplicateBullets(t *testing.T) {
 	b, err := os.ReadFile(filepath.Join("..", "CHANGELOG.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	dups := duplicateBullets(string(b))
-	for title, at := range dups {
-		if _, known := knownDuplicates[title]; !known {
-			t.Errorf("the bullet %q is in the Unreleased section %d times (lines %v): keep one", title, len(at), at)
-		}
+	for _, p := range duplicateProblems(duplicateBullets(string(b)), knownDuplicates) {
+		t.Error(p)
 	}
-	for title := range knownDuplicates {
-		if _, still := dups[title]; !still {
-			t.Errorf("%q is no longer duplicated: delete its entry from knownDuplicates", title)
-		}
+}
+
+func TestDuplicateProblems(t *testing.T) {
+	dups := map[string][]int{"New one": {3, 9}, "Old one": {5, 7}}
+	if got := duplicateProblems(dups, map[string]string{"Old one": "owner decides"}); len(got) != 1 || !strings.Contains(got[0], "New one") {
+		t.Errorf("an unknown duplicate: %v", got)
+	}
+	if got := duplicateProblems(map[string][]int{}, map[string]string{"Old one": "owner decides"}); len(got) != 1 || !strings.Contains(got[0], "no longer duplicated") {
+		t.Errorf("a known duplicate that is gone: %v", got)
+	}
+	if got := duplicateProblems(dups, map[string]string{"New one": "x", "Old one": "y"}); len(got) != 0 {
+		t.Errorf("all known: %v", got)
 	}
 }
 
