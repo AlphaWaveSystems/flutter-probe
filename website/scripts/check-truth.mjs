@@ -14,7 +14,7 @@
 //     partner", "Apply by email"...) anywhere but the design-partner form (extra query parameters allowed) or the support address,
 //   - names a feature that is not built or an offer that waits for the legal review, as a claim (BANNED; a refund is named only next to
 //     the refund policy: a link to /refunds/ in its paragraph or <details> block, or a sentence that does nothing but point to the policy;
-//     "money-back" only in a plain "there is no money-back offer" in its own clause; "upload" (or sending reports to the cloud) and
+//     "money-back" only as a whole sentence that is a plain "there is no money-back offer"; "upload" (or sending reports to the cloud) and
 //     "any CI" in one paragraph that has no sentence about uploads saying where they work ("GitHub Actions" with "only", "today" or
 //     "for now", no other CI named), or that has a sentence about uploads or a CI that looks ahead ("next", "soon", "on the way"),
 //     or that promises uploads in the clause of "any CI"),
@@ -64,19 +64,18 @@ const REFUND_WORD = /(?<!\bnon-)\brefund(?:s|ed|able)?\b/gi;
 const REFUND_TEST = /(?<!\bnon-)\brefund(?:s|ed|able)?\b/i;
 // A sentence that only points to the refund policy, and nothing else.
 const POLICY_SENTENCE = /^(?:(?:the|our)\s+)?refund policy$|^(?:(?:refunds?|refund requests?|refund policy)\s+)?(?:see|read|refer to|are in|are described in|are covered by|are set out in|details in|details are in)\s+(?:our|the)\s+(?:refund\s+)?policy$/;
-// A plain statement that there is no money-back offer, tested on the clause of each "money-back" (the parts between a comma, ";", ":", a
-// dash, "and", "yet", "while", "whereas"), and never in a question or a sentence that goes on with "but", "though", "although",
-// "however", "except" or "unless" (CONTRAST: those words reject the whole sentence, so they need no split).
-const NO_MONEY_BACK = /\b(?:there\s+(?:is|are)\s+no|we\s+(?:have\s+no|do\s+not\s+(?:offer|have)|don't\s+(?:offer|have)|never\s+(?:offer|have))|no)\s+(?:a\s+|any\s+)?money[- ]back\b/i;
-const MONEY_BACK_SPLIT = /[,;:\u2014\u2013]|\b(?:and|yet|while|whereas)\b/gi;
-const CONTRAST = /\b(?:but|however|except|unless|although|though)\b/i;
+// The one wording of "money-back" that passes: a whole sentence that is a plain denial, with one mention (the pattern has room for one) ("There is no money-back
+// offer yet.", "We never offer a money-back guarantee."). Anything else that names it (a second clause, a second mention, a question, a
+// "but", a dash or a bracket, anything after the offer but "yet", "today" or "for now") is an offer to the check and is reworded on the
+// site. Spelling out the ways a sentence can go on would be a list that never ends; this is the one shape that is allowed.
+const PLAIN_MONEY_BACK_DENIAL = /^(?:there\s+(?:is|are)\s+no|we\s+(?:have\s+no|do\s+not\s+(?:offer|have)|don't\s+(?:offer|have)|never\s+(?:offer|have))|no)\s+(?:(?:a|any)\s+)?money[- ]?back(?:\s+(?:offer|guarantee|policy))?(?:\s+(?:yet|today|at\s+the\s+moment|for\s+now))?[.!]?$/i;
 // Other CI systems, and the words that say GitHub Actions is not the only one.
 const OTHER_CI = /\b(?:GitLab|Jenkins|Circle ?CI|Bitbucket|Travis|Azure (?:DevOps|Pipelines)|Buildkite|TeamCity|Bamboo|Codemagic|Bitrise|Drone|Semaphore|Cirrus|Gitea|Harness|Tekton|AppVeyor|Buddy)\b/i;
 const NOT_ONLY = /\bnot\s+(?:the\s+)?only\b|\bnot only\b|\b(?:too|as well|also|and more|and others|among others|besides)\b/i;
 // A sentence about uploads or CI systems, and words that look ahead: "GitLab next month", "more CI systems are on the way". The check reads
 // the sentences about uploads and CI systems for them, not the whole paragraph ("the next step", "the CLI will print a summary").
 const CI_SUBJECT = new RegExp(`\\b(?:upload\\w*|CI|GitHub Actions|pipelines?|runners?|integrations?)\\b|${OTHER_CI.source}`, 'i');
-const FORWARD = /\b(?:next|soon|coming|planned|will|later|upcoming|roadmap|beta|follows?|arrives?|adding|on the way|in the works|in the pipeline|Q[1-4]|(?:in|by|this|next) (?:January|February|March|April|May|June|July|August|September|October|November|December|year|quarter|month|week))\b/i;
+const FORWARD = /\b(?:next|soon|shortly|in progress|under development|working on|priority|coming|planned|will|later|upcoming|roadmap|beta|follows?|arrives?|adding|on the way|in the works|in the pipeline|Q[1-4]|(?:in|by|this|next) (?:January|February|March|April|May|June|July|August|September|October|November|December|year|quarter|month|week))\b/i;
 // Sending reports to the cloud is an upload, whatever the verb.
 const UPLOADISH = /\bupload|\b(?:send|sends|sending|push|pushes|pushing|post|posts|stream|streams|sync|syncs|ship|ships)\b[^.!?]{0,50}\b(?:to|into)\s+(?:probe\s+)?cloud\b/i;
 const BUY_WORD = /\b(?:start|subscribe|checkout|check out|buy|purchase|upgrade)\b/i;
@@ -388,15 +387,13 @@ export function checkPage(file, raw, plans, apply) {
     seenRefund.add(s);
     at(m.index, m[0], 'refund terms wait for the legal review: name a refund only next to the link to /refunds/, or in a sentence that only points to the refund policy');
   }
-  // "Money-back" is an offer, except in a plain statement that there is none: "There is no money-back offer yet.", "We never offer a
-  // money-back guarantee." The negation must be in the clause of that "money-back" ("There is no money-back offer, and a money-back offer
-  // for annual plans" fails), and the sentence is not a question and does not go on with "but" or "though".
-  for (const m of text.matchAll(/\bmoney[- ]back\b/gi)) {
+  // "Money-back" (also "moneyback") is an offer, except in a sentence that is nothing but a plain denial with one mention: "There is no
+  // money-back offer yet.", "We never offer a money-back guarantee." A second clause, a second mention or any other ending fails.
+  for (const m of text.matchAll(/\bmoney[- ]?back\b/gi)) {
     const [a, b] = sentenceSpan(m.index);
-    const sentence = textOf(text.slice(a, b));
-    const clause = textOf(clauseAt(a, b, m.index, MONEY_BACK_SPLIT));
-    if (NO_MONEY_BACK.test(clause) && !/\?\s*$/.test(sentence) && !CONTRAST.test(sentence)) continue;
-    at(m.index, m[0], 'refund terms wait for the legal review');
+    const sentence = textOf(text.slice(a, b)).replace(/\u2019/g, "'").replace(/\s+/g, ' ').trim();
+    if (PLAIN_MONEY_BACK_DENIAL.test(sentence)) continue;
+    at(m.index, m[0], 'refund terms wait for the legal review: "money-back" passes only in a sentence that is a plain denial ("There is no money-back offer yet.")');
   }
   // Reports work in any CI; uploads do not. A paragraph that talks about uploads (or sending reports to the cloud) and says "any CI" must
   // have (1) a sentence about uploads that says GitHub Actions with "only", "today" or "for now", names no other CI and does not say it
