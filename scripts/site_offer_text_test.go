@@ -8,12 +8,12 @@ import (
 	"testing"
 )
 
-// The design-partner offer is one text, decided by the owner, and every page and form that states it states the same words. Its three sentences are checked as
+// The design-partner offer is one text, in the words the owner chose after they were compared with how comparable vendors word beta and early-access offers, and every page and form that states it states the same words. Its three sentences are checked as
 // whole sentences in each place, so a paraphrase on one page (or the old "50% off for life") is found.
 const (
-	offerFree   = "Free from your first upload until paid plans open, and for at least 60 days."
-	offerAfter  = "Afterwards 50% off the plan you subscribe to, for as long as you stay subscribed."
-	offerReturn = "In return: use it on a real project and send short notes. We may change or end the beta."
+	offerFree   = "Probe Cloud is free for design partners from your first upload until paid plans open, and for at least 60 days."
+	offerAfter  = "After that you get 50% off the plan you subscribe to, for as long as you stay subscribed."
+	offerReturn = "In return, use it on a real project and send us short notes. This is a beta: we may change or end it."
 )
 
 var offerPlaces = []string{
