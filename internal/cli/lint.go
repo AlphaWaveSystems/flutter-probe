@@ -63,7 +63,11 @@ var lintCmd = &cobra.Command{
 			}
 			var program []string
 			for _, p := range report.Program {
-				program = append(program, p.Message)
+				if p.Line > 0 {
+					program = append(program, fmt.Sprintf("line %d: %s", p.Line, p.Message))
+				} else {
+					program = append(program, p.Message)
+				}
 			}
 			warnings = append(program, warnings...)
 			if len(problems) == 0 && len(warnings) == 0 {

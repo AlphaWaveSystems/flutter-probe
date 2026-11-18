@@ -24,7 +24,13 @@ Parameters are referenced with angle brackets (`<email>`, `<password>`) inside t
 
 ### Naming a recipe
 
-A call is the name written as a step, so the name must not start with a ProbeScript keyword. `recipe "log in as"` parses, but `log in as "user@test.com" with "secret123"` is read as the `log` step followed by a stray call, and the run stops with `unknown step "as <arg> with <arg>"`. Start the name with another word (`sign in as`, `login as`). `probe lint` warns on a recipe declared with a keyword name, and names the word.
+A call is the name written as a step, so a call has to be read as that name. Three kinds of name are not:
+
+- A name that starts with a ProbeScript keyword. `recipe "log in as"` parses, but `log in as "user@test.com" with "secret123"` is read as the `log` step followed by a stray call, and the run stops with `unknown step "as <arg> with <arg>"`.
+- A name that starts with a filler word the parser drops from a step (`to`, `in`, `on`, `is`, `from`, `at`, `of`, `for`, `a`, `an`, `it`, `this`, `that`, `are`, `into`). `recipe "on the home screen"` is called as `on the home screen`, which is looked up as `home screen`, so the run stops with `unknown step "home screen"`.
+- A name with capital letters. A call is looked up in lower case, so `recipe "Sign In"` is never found: write `recipe "sign in"`.
+
+Start the name with another word (`sign in as`, `login as`). `probe lint` warns on a recipe declared with a name that a call cannot reach, and names the word.
 
 ## Using Recipes
 

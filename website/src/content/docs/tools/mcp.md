@@ -32,7 +32,7 @@ FlutterProbe ships an MCP (Model Context Protocol) server as a standalone binary
 | `migrate_maestro` | Convert Maestro YAML flows to ProbeScript (recursive, mirrors subdirectories, 2.x syntax) |
 | `run_tests` | Run `.probe` test files (supports composite multi-device tests via `composite_devices`) |
 | `list_files` | List all `.probe` files in a directory |
-| `lint` | Validate `.probe` file syntax without running (warns on a recipe declared with a name that starts with a ProbeScript keyword, such as `log in as`) |
+| `lint` | Validate `.probe` file syntax without running (warns on a recipe declared with a name that a call cannot reach: one that starts with a ProbeScript keyword such as `log in as` or with a filler word such as `on`, or has capital letters) |
 | `record` | Record user interactions and generate a `.probe` test file (runs for `timeout` duration, default 30s) |
 
 `get_widget_tree`, `take_screenshot`, `run_script`, and `run_tests` accept an optional `device` argument (serial or UDID) to pin a specific target.

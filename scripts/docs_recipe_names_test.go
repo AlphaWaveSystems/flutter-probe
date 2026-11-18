@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
+	"github.com/alphawavesystems/flutter-probe/internal/runner"
 )
 
 // A recipe whose name starts with a ProbeScript keyword (`recipe "log in as"`) parses, but a call to it is read as that
@@ -51,8 +52,8 @@ func TestDocumentedRecipesCanBeCalled(t *testing.T) {
 			if strings.TrimSpace(m[2]) != "" {
 				params = len(strings.Split(m[2], ","))
 			}
-			if word := parser.RecipeCallProblem(m[1], params); word != "" {
-				problems = append(problems, filepath.ToSlash(strings.TrimPrefix(p, recipeDocsRoot+string(filepath.Separator)))+": recipe \""+m[1]+"\" starts with the keyword "+word)
+			if word, why := runner.RecipeCallProblem(m[1], params); why != "" {
+				problems = append(problems, filepath.ToSlash(strings.TrimPrefix(p, recipeDocsRoot+string(filepath.Separator)))+": recipe \""+m[1]+"\" cannot be called ("+why+" at "+word+")")
 			}
 		}
 		return nil
@@ -136,7 +137,9 @@ func programSteps(prog *parser.Program) [][]parser.Step {
 
 // A call to a recipe named with a keyword fails even when the recipe is declared on another page (the Hooks page called
 // `log in as` and declared nothing). So the snippets are parsed too: a snippet that parses must not hold a line that is
-// read as a step plus a stray recipe call. A snippet that does not parse (an excerpt, a fragment) is skipped.
+// read as a step plus a stray recipe call. Limits: a snippet that does not parse (an excerpt, a fragment) is skipped without a
+// message, and only the top-level steps of a test, hook or recipe are looked at, so a split line inside an `if`, `repeat` or `retry`
+// block is not seen.
 func TestDocumentedSnippetsHaveNoSplitLines(t *testing.T) {
 	scanned, parsed := 0, 0
 	var problems []string

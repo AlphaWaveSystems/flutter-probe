@@ -6,40 +6,45 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
 )
 
-func TestRecipeCallProblem(t *testing.T) {
+func TestSimulateRecipeCall(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		params int
-		want   string // the first word when the call is not read as a recipe call, "" when it is
+		want   parser.CallReading
+		call   string // the name of the call the parser gives, when it is one recipe call
 	}{
-		{"sign in as", 2, ""},
-		{"log in as", 2, "log"}, // log is a keyword: the call is the log step plus a stray call
-		{"log in", 0, "log"},
-		{"login as", 2, ""},
-		{"go to the checkout", 0, ""},
-		{"the login", 1, ""}, // a filler word at the start is skipped and the call still resolves
-		{"add item to cart", 1, ""},
-		{"home page", 0, ""},
-		{"take a break", 0, "take"},
-		{"pause the app", 0, "pause"},
-		{"tap the logo", 1, "tap"},
-		{"go back", 0, "go"},
-		{"open the menu", 0, ""},
-		{"restart everything", 0, "restart"},
-		{"press the home key", 0, ""},
-		{"2nd attempt", 0, ""},
-		// The simulated call carries one quoted argument per parameter, so the parameter count matters. Only a filler word on
-		// its own shows it: `to` alone is skipped as a filler (no call), `to "x"` is a call.
-		{"to", 0, "to"},
-		{"to", 1, ""},
-		{"the", 0, "the"},
-		{"the", 2, ""},
-		{"", 0, ""},             // no words: not simulated
-		{`say "hi"`, 0, ""},     // not plain words: not simulated
-		{"fill <email>", 1, ""}, // a placeholder: not simulated
+		{"sign in as", 2, parser.CallIsRecipeCall, "sign in as <arg> <arg>"},
+		{"login as", 2, parser.CallIsRecipeCall, "login as <arg> <arg>"},
+		{"add item to cart", 1, parser.CallIsRecipeCall, "add item to cart <arg>"},
+		{"Sign In", 0, parser.CallIsRecipeCall, "sign in"}, // the parser lower-cases the call
+		{"the login", 1, parser.CallIsRecipeCall, "login <arg>"},
+		{"log in as", 2, parser.CallIsOtherStep, ""}, // log is a keyword: the log step plus a stray call
+		{"take a break", 0, parser.CallIsOtherStep, ""},
+		{"pause the app", 0, parser.CallIsOtherStep, ""},
+		{"tap the logo", 1, parser.CallIsOtherStep, ""},
+		{"go back", 0, parser.CallIsOtherStep, ""},
+		{"restart everything", 0, parser.CallIsOtherStep, ""},
+		// A filler word at the start of a step is dropped, so the call is not written with the recipe's name.
+		{"on the home screen", 0, parser.CallIsRecipeCall, "home screen"},
+		{"to", 1, parser.CallIsRecipeCall, "<arg>"},
+		{"in the cart", 1, parser.CallIsRecipeCall, "cart <arg>"},
+		{"is signed in", 0, parser.CallIsRecipeCall, "signed in"},
+		{"the", 0, parser.CallIsNothing, ""}, // every word is a filler: no step at all
+		{"the", 2, parser.CallIsRecipeCall, "<arg> <arg>"},
+		{"", 0, parser.CallNotSimulated, ""},
+		{`say "hi"`, 0, parser.CallNotSimulated, ""},
+		{"fill <email>", 1, parser.CallNotSimulated, ""},
 	} {
-		if got := parser.RecipeCallProblem(tc.name, tc.params); got != tc.want {
-			t.Errorf("RecipeCallProblem(%q, %d) = %q, want %q", tc.name, tc.params, got, tc.want)
+		call, how, first := parser.SimulateRecipeCall(tc.name, tc.params)
+		if how != tc.want {
+			t.Errorf("SimulateRecipeCall(%q, %d) = reading %d, want %d", tc.name, tc.params, how, tc.want)
+			continue
+		}
+		if how == parser.CallIsRecipeCall && call.Name != tc.call {
+			t.Errorf("SimulateRecipeCall(%q, %d) call name = %q, want %q", tc.name, tc.params, call.Name, tc.call)
+		}
+		if how != parser.CallNotSimulated && first == "" {
+			t.Errorf("SimulateRecipeCall(%q, %d) gave no first word", tc.name, tc.params)
 		}
 	}
 }
