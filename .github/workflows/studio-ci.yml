@@ -110,6 +110,18 @@ jobs:
       - name: Frontend tests (save as)
         working-directory: studio/frontend
         run: npm run test:save-as
+      - name: Typing target tests
+        working-directory: studio/frontend
+        run: npm run test:typing-target
+      - name: Modal focus tests
+        working-directory: studio/frontend
+        run: npm run test:modal-focus
+      - name: Contrast tool tests
+        working-directory: studio/frontend
+        run: npm run test:contrast
+      - name: Contrast check (every text pair is 4.5:1 or on the allowlist)
+        working-directory: studio/frontend
+        run: npm run check:contrast
       - name: ProbeScript dictionary is up to date
         working-directory: studio/frontend
         run: npm run check:probescript

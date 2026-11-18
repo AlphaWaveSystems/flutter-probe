@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -39,6 +40,10 @@ type StepEvent struct {
 	At          time.Time     // wall-clock time this event was emitted
 	// Target is the element an action step acts on. It is set on StepStarted, and only when a recorder is attached.
 	Target *StepTarget
+	// Visible is what the agent reported on screen when the step timed out, set on StepFailed only when the failure is the runner's own step timeout. It is data
+	// for Studio's rule-based fixes and is kept out of every serialisation (`json:"-"`): a consumer that marshals or copies a StepEvent must not add a second, raw
+	// copy of what the failure text already carries masked and cut.
+	Visible VisibleItems `json:"-"`
 	// SelectorIsID is true when the step's selector is an id (#name), not a text. The step text quotes both, so a
 	// consumer that needs to tell them apart (the Studio triage) reads this flag.
 	SelectorIsID bool
@@ -94,6 +99,12 @@ func (e *Executor) emitStep(step interface{ GetLine() int }, desc string, status
 	}
 	if a, ok := step.(parser.ActionStep); ok && a.Sel != nil {
 		ev.SelectorIsID = a.Sel.Kind == parser.SelectorID
+	}
+	if status == StepFailed {
+		var timeout *stepTimeoutError
+		if errors.As(err, &timeout) {
+			ev.Visible = timeout.items
+		}
 	}
 	if status == StepStarted && e.recorder != nil {
 		if a, ok := step.(parser.ActionStep); ok {

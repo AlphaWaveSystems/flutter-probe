@@ -276,4 +276,24 @@ test.describe("Insert before the step", () => {
       studio.stop();
     }
   });
+
+  test("ib-09 a run that starts while Studio is checking stops the insertion (the run events say so), and nothing is inserted", async ({ page }) => {
+    const studio = await startStudio(base);
+    try {
+      await openLogin(page, studio);
+      await fireFailedStep(page);
+      // hold Studio's answer back, and start a run (the event a run started elsewhere sends) before it arrives
+      await page.route("**/__headless/call", async (route) => {
+        if ((route.request().postData() ?? "").includes('"method":"CheckInsertBefore"')) await new Promise((r) => setTimeout(r, 1200));
+        await route.continue();
+      });
+      await insertButton(page).click();
+      await page.evaluate(() => (((window as any).__handlers["run:started"]) || []).forEach((cb: (...a: unknown[]) => void) => cb("tests/login.probe")));
+      await expect(toasts(page)).toContainText("a run started while Studio was checking");
+      await expect(page.locator("#editor .view-lines")).not.toContainText("wait until");
+      expect(fs.readFileSync(path.join(studio.ws, "tests", "login.probe"), "utf8")).toBe(base);
+    } finally {
+      studio.stop();
+    }
+  });
 });

@@ -111,6 +111,15 @@ type VisibleItems struct {
 	Texts []string
 	Keys  []string
 	Cut   int
+	// Detail says the agent also told what the snapshot leaves out (editable_texts, rich_texts, max, truncated, all well formed): without it the snapshot is
+	// of an agent that does not say, and a reader must treat it as incomplete. The fields below are meaningful only when it is true.
+	Detail    bool
+	Editable  []string // the texts of visible fields that are not obscured (they are also in Texts when a Text did not already hold them)
+	Rich      []string // the texts of visible RichTexts that no Text and no Icon built
+	Max       int      // the cap of each list
+	Truncated bool     // some list saw more than Max
+	// Masked is true when masking a known secret changed any item: the masked text is not the text on screen, so what it contains cannot be counted.
+	Masked bool
 }
 
 // maxVisibleItemLen is the length the printed form cuts an item to.
@@ -141,6 +150,20 @@ func visibleSnapshot(client probelink.ProbeClient) (string, VisibleItems) {
 	items.Texts, cutTexts = wholeItems(res.Texts)
 	items.Keys, cutKeys = wholeItems(res.Keys)
 	items.Cut = cutTexts + cutKeys
+	items.Masked = anyMasked(res.Texts) || anyMasked(res.Keys)
+	if d := res.Detail; d != nil {
+		var cutEditable, cutRich int
+		items.Editable, cutEditable = wholeItems(d.EditableTexts)
+		items.Rich, cutRich = wholeItems(d.RichTexts)
+		items.Cut += cutEditable + cutRich
+		items.Detail, items.Max, items.Truncated = true, d.Max, d.Truncated
+		items.Masked = items.Masked || anyMasked(d.EditableTexts) || anyMasked(d.RichTexts)
+		for _, n := range d.Counts { // no list may have seen more than the cap and not have said so
+			if n > d.Max {
+				items.Truncated = true
+			}
+		}
+	}
 	// The texts are agent text: a field can show a value the step typed from the environment, so the hint is masked.
 	return sysdialog.ScrubKnown(fmt.Sprintf(" — visible texts: [%s], keys: [%s]", quoteJoin(res.Texts), quoteJoin(res.Keys))), items
 }
@@ -156,6 +179,16 @@ func wholeItems(items []string) (whole []string, n int) {
 		whole = append(whole, it)
 	}
 	return whole, n
+}
+
+// anyMasked says whether masking a known secret changes any of the items.
+func anyMasked(items []string) bool {
+	for _, it := range items {
+		if sysdialog.ScrubKnown(it) != it {
+			return true
+		}
+	}
+	return false
 }
 
 func quoteJoin(items []string) string {
