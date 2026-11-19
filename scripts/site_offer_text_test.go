@@ -11,8 +11,8 @@ import (
 // The design-partner offer is one text, in the words the owner chose after they were compared with how comparable vendors word beta and early-access offers, and every page and form that states it states the same words. Its three sentences are checked as
 // whole sentences in each place, so a paraphrase on one page (or the old "50% off for life") is found.
 const (
-	offerFree   = "Probe Cloud is free for design partners from your first upload until paid plans open, and for at least 60 days."
-	offerAfter  = "After that you get 50% off the plan you subscribe to, for as long as you stay subscribed."
+	offerFree   = "Probe Cloud is free for design partners while we test it."
+	offerAfter  = "When paid plans open, you get 50% off the plan you subscribe to, forever."
 	offerReturn = "In return, use it on a real project and send us short notes. This is a beta: we may change or end it."
 )
 
@@ -77,7 +77,7 @@ func TestOfferProblems(t *testing.T) {
 		"the three sentences":             {all, 0},
 		"in a list with tags":             {"<li><strong>" + offerFree + "</strong></li><li><strong>" + offerAfter + "</strong></li><li>" + offerReturn + "</li>", 0},
 		"split over lines":                {strings.ReplaceAll(all, " ", "\n  "), 0},
-		"the first sentence changed":      {strings.Replace(all, "at least 60 days", "at least 30 days", 1), 1},
+		"the first sentence changed":      {strings.Replace(all, "while we test it", "for at least 60 days", 1), 1},
 		"the second sentence paraphrased": {strings.Replace(all, "50% off the plan you subscribe to", "50% off any plan", 1), 1},
 		"the third sentence missing":      {offerFree + " " + offerAfter, 1},
 		"the old offer on the page":       {all + " 50% off for life.", 1},
