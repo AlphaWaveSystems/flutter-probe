@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// The design-partner offer is one text, in the words the owner chose after they were compared with how comparable vendors word beta and early-access offers, and every page and form that states it states the same words. Its three sentences are checked as
+// The design-partner offer is one text, in the words the owner chose after they were compared with how comparable vendors word beta and early-access offers, and every page and form that states it states the same words. Its three numbered parts are checked as
 // whole sentences in each place, so a paraphrase on one page (or the old "50% off for life") is found.
 const (
 	offerFree   = "Probe Cloud is free for design partners while we test it."
