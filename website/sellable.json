@@ -33,8 +33,8 @@
         "Unlimited seats, no overage",
         "100,000 results a month",
         "Run history for your team",
-        "Flaky tests flagged, with the evidence",
-        "A verdict for each commit",
+        "Unstable tests listed, with how often each failed or needed a retry",
+        "A verdict for the newest commit of each pull request, with the reason",
         "Trends over time"
       ]
     },

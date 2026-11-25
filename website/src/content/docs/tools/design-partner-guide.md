@@ -7,6 +7,10 @@ This page is for the first teams trying Probe Cloud, the hosted report service t
 
 > **Status.** The hosted service is not live yet. Today you can install everything, run your tests, and inspect exactly what an upload would send with `--upload-dry-run`. When the service goes live, design partners get access first. The beta may change or end, and plan details are not final.
 
+## The offer
+
+Probe Cloud is free for design partners while we test it. When paid plans open, you get 50% off the plan you subscribe to, for as long as you stay subscribed. In return, use it on a real project and send us short notes. This is a beta: we may change or end it, including the 50% discount.
+
 ## What you install
 
 1. **The CLI.** `brew tap AlphaWaveSystems/tap && brew install AlphaWaveSystems/tap/probe`, or a binary from the [releases page](https://github.com/AlphaWaveSystems/flutter-probe/releases/latest). Check it with `probe version`.

@@ -8,7 +8,7 @@ body:
       value: |
         **This issue is public.** Everything you write here can be read by anyone. If you prefer, email support@alphawavesystems.com instead.
 
-        Probe Cloud is a preview and the hosted service is not live yet. The first 10 teams try it free during the beta and get 50% off for life when paid plans launch. The beta may change or end.
+        Probe Cloud is a preview and the hosted service is not live yet. The first 10 teams get this offer. Probe Cloud is free for design partners while we test it. When paid plans open, you get 50% off the plan you subscribe to, for as long as you stay subscribed. In return, use it on a real project and send us short notes. This is a beta: we may change or end it, including the 50% discount.
   - type: input
     id: team
     attributes:
