@@ -12,7 +12,7 @@ import (
 // whole sentences in each place, so a paraphrase on one page (or the old "50% off for life") is found.
 const (
 	offerFree   = "Probe Cloud is free for design partners while we test it."
-	offerAfter  = "When paid plans open, you get 50% off the plan you subscribe to, forever."
+	offerAfter  = "When paid plans open, you get 50% off the plan you subscribe to, for as long as you stay subscribed."
 	offerReturn = "In return, use it on a real project and send us short notes. This is a beta: we may change or end it."
 )
 
