@@ -37,7 +37,7 @@ Install the FlutterProbe CLI:
 ```bash
 # macOS + Linux (recommended)
 brew tap AlphaWaveSystems/tap
-brew install probe
+brew install AlphaWaveSystems/tap/probe
 
 # Or via go install (good for CI)
 go install github.com/alphawavesystems/flutter-probe/cmd/probe@latest

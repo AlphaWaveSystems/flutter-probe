@@ -1,7 +1,7 @@
 # Release pipeline: canary → dogfood → stable
 
 Every release passes through a canary channel and a dogfood gate before it
-becomes the stable version that `brew install probe` and pub.dev serve. No
+becomes the stable version that `brew install AlphaWaveSystems/tap/probe` and pub.dev serve. No
 step in this pipeline depends on a human; the gates are checks, labels and
 timers.
 
@@ -10,7 +10,7 @@ timers.
 | Channel | Tag | Workflow | Installs as |
 | --- | --- | --- | --- |
 | Canary | `vX.Y.Z-next.N` | `release-canary.yml` | `brew install AlphaWaveSystems/tap/probe@next`; agent from the tagged source (git dependency, `path: probe_agent`); a pub.dev pre-release is published only when the pubspec version carries `-next.N`. User guide: website `getting-started/installation` |
-| Stable | `vX.Y.Z` | `release.yml` + `publish-pub-dev.yml` | `brew install probe`; pub.dev stable |
+| Stable | `vX.Y.Z` | `release.yml` + `publish-pub-dev.yml` | `brew install AlphaWaveSystems/tap/probe`; pub.dev stable |
 
 `scripts/release.sh 0.27.0-next.1` bumps the version files, commits and tags a
 canary; `scripts/release.sh 0.27.0` tags the stable release once the gate has
@@ -128,7 +128,7 @@ git grep -n "flutter_probe_agent: *\^0" -- README.md website probe_agent/README.
   Set them to the new minor only AFTER the agent is on pub.dev (check `https://pub.dev/api/packages/flutter_probe_agent`: its `latest.version`):
   a snippet ahead of pub.dev makes `flutter pub get` fail for every new user. That happened with 0.27.0: the release run failed, the agent was
   never published, and the pages said `^0.27.0` while pub.dev had 0.26.1. Until the publish succeeds the snippets keep the version that is on
-  pub.dev. The install guide leads with `flutter pub add --dev flutter_probe_agent`, which always resolves to what pub.dev has. Historic blog
+  pub.dev. The install guide leads with `flutter pub add dev:flutter_probe_agent`, which always resolves to what pub.dev has. Historic blog
   posts are left alone.
 - **Canary and tag examples** in `docs/ops/release-pipeline.md` and `.github/workflows/dogfood-gate.yml` use the current `X.Y.Z-next.N`; the
   install guide ("Try a canary build") uses the placeholder `vX.Y.Z-next.N`, so it needs no change.

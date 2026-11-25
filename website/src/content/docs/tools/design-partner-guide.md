@@ -13,7 +13,7 @@ Probe Cloud is free for design partners while we test it. When paid plans open, 
 
 ## What you install
 
-1. **The CLI.** `brew tap AlphaWaveSystems/tap && brew install probe`, or a binary from the [releases page](https://github.com/AlphaWaveSystems/flutter-probe/releases/latest). Check it with `probe version`.
+1. **The CLI.** `brew tap AlphaWaveSystems/tap && brew install AlphaWaveSystems/tap/probe`, or a binary from the [releases page](https://github.com/AlphaWaveSystems/flutter-probe/releases/latest). Check it with `probe version`.
 2. **The agent** in your Flutter app, as a dev dependency, started only when you build with `--dart-define=PROBE_AGENT=true`. See [installation](/getting-started/installation/).
 3. **A first test.** `probe init`, then `probe lint tests`, then `probe test tests/example.probe --device <id>`. The [quick start](/getting-started/quick-start/) walks through it.
 

@@ -292,7 +292,7 @@ const dartLogin = `<span class="kw">testWidgets</span>(<span class="str">'user c
       if (!b) return;
       b.addEventListener('click', function () {
         var done = function () { b.textContent = 'Copied!'; setTimeout(function () { b.textContent = 'Copy'; }, 1500); };
-        try { navigator.clipboard.writeText('brew tap AlphaWaveSystems/tap && brew install probe').then(done, function () { b.textContent = 'Select and copy'; }); }
+        try { navigator.clipboard.writeText('brew tap AlphaWaveSystems/tap && brew install AlphaWaveSystems/tap/probe').then(done, function () { b.textContent = 'Select and copy'; }); }
         catch (e) { b.textContent = 'Select and copy'; }
       });
     })();

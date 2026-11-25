@@ -15,12 +15,12 @@ probe_version: 0.25.x   # any 0.25 patch release; write 0.25.1 to pin one exact 
 ```yaml
 # workflow step
 - name: Install FlutterProbe
-  run: brew install probe   # the latest stable release; confirm with probe version
+  run: brew install AlphaWaveSystems/tap/probe   # the latest stable release; confirm with probe version
 - name: Run tests
   run: probe test
 ```
 
-`brew install probe` always installs the latest stable release. For an exact pin, install that release from the [releases page](https://github.com/AlphaWaveSystems/flutter-probe/releases) instead. Keep `probe_version` in step with the CLI the job installs: a mismatch fails the job before any test runs.
+`brew install AlphaWaveSystems/tap/probe` always installs the latest stable release. For an exact pin, install that release from the [releases page](https://github.com/AlphaWaveSystems/flutter-probe/releases) instead. Keep `probe_version` in step with the CLI the job installs: a mismatch fails the job before any test runs.
 
 ## Using the ready-made action
 
