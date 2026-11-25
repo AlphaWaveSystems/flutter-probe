@@ -74,15 +74,16 @@ func TestOfferProblems(t *testing.T) {
 		text string
 		want int
 	}{
-		"the three sentences":             {all, 0},
-		"in a list with tags":             {"<li><strong>" + offerFree + "</strong></li><li><strong>" + offerAfter + "</strong></li><li>" + offerReturn + "</li>", 0},
-		"split over lines":                {strings.ReplaceAll(all, " ", "\n  "), 0},
-		"the first sentence changed":      {strings.Replace(all, "while we test it", "for at least 60 days", 1), 1},
-		"the second sentence paraphrased": {strings.Replace(all, "50% off the plan you subscribe to", "50% off any plan", 1), 1},
-		"the third sentence missing":      {offerFree + " " + offerAfter, 1},
-		"the old offer on the page":       {all + " 50% off for life.", 1},
-		"the old beta line":               {all + " Free during the beta.", 1},
-		"nothing":                         {"", 3},
+		"the three sentences":                     {all, 0},
+		"in a list with tags":                     {"<li><strong>" + offerFree + "</strong></li><li><strong>" + offerAfter + "</strong></li><li>" + offerReturn + "</li>", 0},
+		"split over lines":                        {strings.ReplaceAll(all, " ", "\n  "), 0},
+		"the first sentence changed":              {strings.Replace(all, "while we test it", "for at least 60 days", 1), 1},
+		"the second sentence paraphrased":         {strings.Replace(all, "50% off the plan you subscribe to", "50% off any plan", 1), 1},
+		"the third sentence missing":              {offerFree + " " + offerAfter, 1},
+		"the old offer on the page":               {all + " 50% off for life.", 1},
+		"the old beta line":                       {all + " Free during the beta.", 1},
+		"the Team line with the old beta wording": {all + " Free for design partners during the beta.", 1},
+		"nothing": {"", 3},
 	} {
 		if got := len(offerProblems("p", c.text)); got != c.want {
 			t.Errorf("%s: %d problem(s), want %d", name, got, c.want)
