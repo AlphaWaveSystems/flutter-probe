@@ -9,7 +9,7 @@ This page is for the first teams trying Probe Cloud, the hosted report service t
 
 ## The offer
 
-Probe Cloud is free for design partners while we test it. When paid plans open, you get 50% off the plan you subscribe to, for as long as you stay subscribed. In return, use it on a real project and send us short notes. This is a beta: we may change or end it.
+Probe Cloud is free for design partners while we test it. When paid plans open, you get 50% off the plan you subscribe to, for as long as you stay subscribed. In return, use it on a real project and send us short notes. This is a beta: we may change or end it, including the 50% discount.
 
 ## What you install
 
