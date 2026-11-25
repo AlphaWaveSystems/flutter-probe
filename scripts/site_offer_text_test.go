@@ -27,7 +27,7 @@ var offerPlaces = []string{
 var (
 	offerTag   = regexp.MustCompile(`<[^>]*>`)
 	offerSpace = regexp.MustCompile(`\s+`)
-	oldOffer   = regexp.MustCompile(`(?i)50%\s+off\s+for\s+life|free\s+during\s+the\s+beta`)
+	oldOffer   = regexp.MustCompile(`(?i)50%\s+off\s+for\s+life|free\s+(for\s+design\s+partners\s+)?during\s+the\s+beta`)
 )
 
 // offerProblems returns what is wrong with the offer in one place: a sentence missing, or the old wording present.
@@ -121,5 +121,17 @@ func TestTeamFeatureWordingIsTheSameInSellableAndOnTheCard(t *testing.T) {
 		if strings.Contains(have, old) || strings.Contains(string(page), old) {
 			t.Errorf("the previous wording %q is still on the pricing card or in sellable.json", old)
 		}
+	}
+}
+
+// The landing page card's bullet is a shorter form of the discount sentence; it is checked on its own so that it cannot drift from the owner's words.
+func TestLandingBulletStatesTheDiscountInTheOwnersWords(t *testing.T) {
+	b, err := os.ReadFile("../website/src/pages/index.astro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const bullet = "Design partners get 50% off the plan they subscribe to, for as long as they stay subscribed."
+	if !strings.Contains(string(b), bullet) {
+		t.Errorf("the landing page bullet does not state the discount in the owner's words: %s", bullet)
 	}
 }
