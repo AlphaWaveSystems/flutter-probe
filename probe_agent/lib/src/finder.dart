@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart' show CupertinoTextField;
 import 'package:flutter/material.dart' show TextField, Tooltip;
+import 'package:flutter/rendering.dart' show RenderIndexedStack;
 import 'package:flutter/widgets.dart';
 
 import 'textfold.dart';
@@ -37,6 +38,39 @@ ModalRoute<dynamic>? probeRouteOf(Element element) {
     return null;
   }
   return found;
+}
+
+/// The position of the child an [IndexedStack] shows, when [element] is the stack's own element; null for any other element.
+/// -1 means it shows nothing (an index of null, or out of range of the children).
+///
+/// What hides the other children is the render object: `RenderIndexedStack` paints, hit-tests and reports semantics for the
+/// child at its `index` only, and that is the same in every Flutter version. Some versions (3.44) also wrap each child in a
+/// `Visibility(visible: false)`, which the rules below recognise; others (3.50) do not, and the child stays mounted, laid out
+/// at its size and attached, so no other check sees it as hidden. The `DropdownButton` keeps its items in an `IndexedStack`, so
+/// a closed one hides them the same way. An ordinary `Stack` shows all its children and is not touched.
+int? probeIndexedStackShown(Element element) {
+  if (element is! MultiChildRenderObjectElement) return null;
+  final RenderObject ro;
+  try {
+    ro = element.renderObject;
+  } catch (_) {
+    return null;
+  }
+  if (ro is! RenderIndexedStack) return null;
+  return ro.index ?? -1;
+}
+
+/// Whether [child] (a child element of [stack]) is under the child [stack] shows. True when [stack] is no IndexedStack.
+bool probeIsShownChild(Element stack, Element child) {
+  final shown = probeIndexedStackShown(stack);
+  if (shown == null) return true;
+  var i = 0;
+  var position = -1;
+  stack.visitChildren((c) {
+    if (identical(c, child)) position = i;
+    i++;
+  });
+  return position == shown;
 }
 
 /// ProbeFinder translates ProbeLink SelectorParam JSON into Flutter elements
@@ -385,11 +419,15 @@ class ProbeFinder {
     final route = probeRouteOf(element);
     if (route != null && !route.isCurrent && !_routeOnScreen(route)) return false;
     // Walk up the tree to check for Offstage / Visibility ancestors
+    // An IndexedStack shows one child: a widget under any other child is hidden (its render object paints nothing for it).
     Element? current = element;
+    Element? below;
     while (current != null) {
       final widget = current.widget;
       if (widget is Offstage && widget.offstage) return false;
       if (widget is Visibility && !widget.visible) return false;
+      if (below != null && !probeIsShownChild(current, below)) return false;
+      below = current;
       current = _parentElement(current);
     }
     return true;
@@ -493,8 +531,13 @@ class ProbeFinder {
     if (widget is Visibility && !widget.visible) return;
     visitor(element);
     if (skipChildrenOf != null && skipChildrenOf(element)) return;
-    element.visitChildren(
-        (child) => _visitElement(child, visitor, skipChildrenOf));
+    // An IndexedStack walks only the child it shows.
+    final shown = probeIndexedStackShown(element);
+    var position = 0;
+    element.visitChildren((child) {
+      if (shown == null || position == shown) _visitElement(child, visitor, skipChildrenOf);
+      position++;
+    });
   }
 
   /// FP-13: a short snapshot of what a user could currently see — visible

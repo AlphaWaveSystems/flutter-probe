@@ -102,7 +102,7 @@ A top-level key, not inside a section. It pins the FlutterProbe CLI release the 
 
 A leading `v` is accepted (`v0.25.1`). A pre-release or build version such as `0.25.1-rc.1` cannot be pinned. Any other value fails when probe.yaml loads, and the error names `probe_version`.
 
-`probe test` checks the running CLI before anything else. If the CLI does not meet the pin, the run stops before a device is touched or a test starts. The message names the installed CLI, the required version and how to install the right one: the release page, or `brew install probe`, which installs the latest stable release. Nothing is downloaded and nothing is upgraded automatically.
+`probe test` checks the running CLI before anything else. If the CLI does not meet the pin, the run stops before a device is touched or a test starts. The message names the installed CLI, the required version and how to install the right one: the release page, or `brew install AlphaWaveSystems/tap/probe`, which installs the latest stable release. Nothing is downloaded and nothing is upgraded automatically.
 
 A pre-release or build suffix on the installed CLI does not count against the pin: `0.25.1-fp3` meets `0.25.1`. A development build (`probe version` prints `dev`) meets no pin.
 

@@ -22,6 +22,7 @@ const widgetFamilies = <String>[
   'progress',
   'layout',
   'gestures',
+  'pickers',
 ];
 
 /// The screen of [family], or null when there is none.
@@ -36,6 +37,7 @@ Widget? widgetFamilyScreen(String family) => switch (family) {
   'progress' => const ProgressFamilyScreen(),
   'layout' => const LayoutFamilyScreen(),
   'gestures' => const GesturesFamilyScreen(),
+  'pickers' => const PickersFamilyScreen(),
   _ => null,
 };
 
@@ -1548,6 +1550,126 @@ class _GesturesFamilyScreenState extends State<GesturesFamilyScreen> {
             'Tap: ${_v('tap')}, Ink: ${_v('ink')}, Double: ${_v('double')}, Hold: ${_v('hold')}, Outer: ${_v('outer')}, '
                 'Inner: ${_v('inner')}, Single: ${_v('single')}, Twice: ${_v('twice')}, Wrapper: ${_v('wrapper')}',
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A DropdownButton (open, an item, a disabled one) and two PopupMenuButtons (one with a text child, one with the default icon and a
+/// tooltip). Both open their items in a route over the screen. State texts: `Color: none|Red|Green|Blue`, `Action: none|Cut|Copy|Paste`,
+/// `Icon menu: none|Rename|Delete`.
+class PickersFamilyScreen extends StatefulWidget {
+  const PickersFamilyScreen({super.key});
+
+  @override
+  State<PickersFamilyScreen> createState() => _PickersFamilyScreenState();
+}
+
+class _PickersFamilyScreenState extends State<PickersFamilyScreen> {
+  String? _color;
+  int _itemTaps = 0;
+  String _action = 'none';
+  String _iconMenu = 'none';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Pickers')),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          _s(
+            'wf_dropdown',
+            (k) => DropdownButton<String>(
+              key: k,
+              hint: const Text('Pick a color'),
+              value: _color,
+              items: [
+                for (final c in const ['Red', 'Green', 'Blue'])
+                  // onTap counts every tap on a menu item, also on the one that is already chosen (onChanged does not run for it).
+                  DropdownMenuItem(
+                    value: c,
+                    onTap: () => setState(() => _itemTaps++),
+                    child: Text(c),
+                  ),
+              ],
+              onChanged: (v) => setState(() => _color = v),
+            ),
+          ),
+          _state('wf_dropdown_state', 'Color: ${_color ?? 'none'}'),
+          _state('wf_item_taps_state', 'Item taps: $_itemTaps'),
+          // Disabled (onChanged: null), the id on the control and the id on a wrapper only (issue #860 is about a wrapper hiding the control).
+          _s(
+            'wf_dropdown_off',
+            (k) => DropdownButton<String>(
+              key: k,
+              value: 'Locked',
+              items: const [
+                DropdownMenuItem(value: 'Locked', child: Text('Locked')),
+                DropdownMenuItem(value: 'Spare', child: Text('Spare')),
+              ],
+              onChanged: null,
+            ),
+          ),
+          Semantics(
+            identifier: 'wf_dropdown_off_w',
+            child: KeyedSubtree(
+              key: const ValueKey('wf_dropdown_off_w'),
+              child: DropdownButton<String>(
+                value: 'Pinned',
+                items: const [
+                  DropdownMenuItem(value: 'Pinned', child: Text('Pinned')),
+                  DropdownMenuItem(value: 'Extra', child: Text('Extra')),
+                ],
+                onChanged: null,
+              ),
+            ),
+          ),
+          _s(
+            'wf_popup',
+            (k) => PopupMenuButton<String>(
+              key: k,
+              onSelected: (v) => setState(() => _action = v),
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'Cut', child: Text('Cut')),
+                PopupMenuItem(value: 'Copy', child: Text('Copy')),
+                PopupMenuItem(value: 'Paste', child: Text('Paste')),
+              ],
+              child: const Padding(
+                padding: EdgeInsets.all(12),
+                child: Text('Actions'),
+              ),
+            ),
+          ),
+          _state('wf_popup_state', 'Action: $_action'),
+          _s(
+            'wf_popup_off',
+            (k) => PopupMenuButton<String>(
+              key: k,
+              enabled: false,
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'Never', child: Text('Never shown')),
+              ],
+              child: const Padding(
+                padding: EdgeInsets.all(12),
+                child: Text('Disabled menu'),
+              ),
+            ),
+          ),
+          _s(
+            'wf_popup_icon',
+            (k) => PopupMenuButton<String>(
+              key: k,
+              tooltip: 'More options',
+              onSelected: (v) => setState(() => _iconMenu = v),
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'Rename', child: Text('Rename')),
+                PopupMenuItem(value: 'Delete', child: Text('Delete')),
+              ],
+            ),
+          ),
+          _state('wf_icon_menu_state', 'Icon menu: $_iconMenu'),
         ],
       ),
     );
