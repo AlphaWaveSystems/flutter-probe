@@ -30,7 +30,7 @@ The `probe` CLI is a Go binary. Install via one of:
 brew tap AlphaWaveSystems/tap
 brew install AlphaWaveSystems/tap/probe
 
-# Option B: Go install (requires Go 1.26.10+)
+# Option B: Go install (requires Go 1.26.11+)
 go install github.com/alphawavesystems/flutter-probe/cmd/probe@latest
 
 # Option C: Download from GitHub Releases (all platforms)
