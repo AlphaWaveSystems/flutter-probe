@@ -253,6 +253,16 @@ jobs:
           if [ -z "$BODY" ]; then
             BODY="Release ${GITHUB_REF_NAME}"
           fi
+          # The release action passes the body to Node as one argument, and Linux caps one
+          # argument at 128 KiB: v0.28.0's section (274,946 bytes) failed with "Argument list
+          # too long". Keep the notes under 60 KB, cut at a line, and link to the full section.
+          LIMIT=60000
+          if [ "$(printf '%s' "$BODY" | wc -c)" -gt "$LIMIT" ]; then
+            BODY="$(printf '%s' "$BODY" | head -c "$LIMIT" | sed '$d')"
+            BODY="${BODY}
+
+          The notes are cut here to fit a GitHub release. The full section is in CHANGELOG.md at this tag: https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/CHANGELOG.md"
+          fi
           {
             echo "body<<ENDOFBODY"
             echo "$BODY"

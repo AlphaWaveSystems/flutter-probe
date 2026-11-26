@@ -51,6 +51,9 @@ passed.
 4. **Promote.** Tag `vX.Y.Z`. `release.yml` builds, publishes the release, and
    updates the stable Homebrew formula; `publish-pub-dev.yml` publishes the
    stable Dart packages; CHANGELOG and docs are updated in the release PR.
+   The GitHub release body is the version's CHANGELOG section, capped at 60 KB
+   (`release.yml`): a longer section is cut at a line, with a link to the full
+   text at the tag. The release action fails on a body over 128 KiB on Linux.
 5. **Rollback** (`auto-rollback.yml`). An issue labelled `prod-incident` within
    24 hours of a stable release marks the previous stable release as `latest`
    again, restores its Homebrew formula and comments on the issue. Tags are
