@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 > At release time the version in `probe_agent/pubspec.yaml` and the one in `probe_agent/lib/src/agent_version.dart` are bumped in the same commit, and never in a feature change. A step is allowed by the capabilities an agent reports, not by its version number.
 
+## [0.28.1] - 2026-11-26
+
 ### Changed
 
 - **Release process: the dogfood gate before a stable tag is about five minutes on the named devices, not about an hour.** `docs/ops/release-pipeline.md` and the dogfood-gate workflow say so. No code changes.
