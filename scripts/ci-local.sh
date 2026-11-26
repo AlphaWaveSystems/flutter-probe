@@ -149,7 +149,7 @@ local_step() { STEP_JOB+=("$1"); STEP_DIR+=("$2"); STEP_CMD+=("$3"); STEP_KIND+=
 # shellcheck disable=SC2016
 declare_jobs() {
   # ---- required: .github/workflows/ci.yml ----
-  job build required "Build" "go make" "go=1.26.10" "ci.yml:build"
+  job build required "Build" "go make" "go=1.26.11" "ci.yml:build"
   step build . 'make build'
   step build . 'make build-convert'
   step build . 'test -x bin/probe
@@ -161,10 +161,10 @@ test -x bin/probe-convert'
   done
 done'
 
-  job unit-tests required "Go unit tests" "go" "go=1.26.10" "ci.yml:unit-tests"
+  job unit-tests required "Go unit tests" "go" "go=1.26.11" "ci.yml:unit-tests"
   step unit-tests . 'go test -v -race -coverprofile=coverage.out ./...'
 
-  job convert-tests required "probe-convert tests" "go make" "go=1.26.10" "ci.yml:convert-tests"
+  job convert-tests required "probe-convert tests" "go make" "go=1.26.11" "ci.yml:convert-tests"
   step convert-tests . 'make build'
   step convert-tests . 'make build-convert'
   step convert-tests . 'make test-convert'
@@ -172,7 +172,7 @@ done'
 
   # staticcheck is installed into this run's temporary directory (GOBIN), not into
   # the developer's own GOBIN.
-  job lint required "Lint" "go" "go=1.26.10" "ci.yml:lint"
+  job lint required "Lint" "go" "go=1.26.11" "ci.yml:lint"
   step lint . 'go vet ./...'
   step lint . 'cd tools/probe-convert && go vet ./...'
   step lint . 'go install honnef.co/go/tools/cmd/staticcheck@latest'
@@ -228,7 +228,7 @@ fi'
   step frontend studio/frontend 'npm run check:contrast'
   step frontend studio/frontend 'npm run check:probescript'
 
-  job studio-go optional "Studio Go tests" "node npm go" "node=26 go=1.26.10" "studio-ci.yml:studio-go"
+  job studio-go optional "Studio Go tests" "node npm go" "node=26 go=1.26.11" "studio-ci.yml:studio-go"
   step studio-go studio/frontend 'npm ci --no-audit --no-fund
 npm run build'
   step studio-go studio 'go test ./...'
@@ -732,7 +732,7 @@ final_block() {
   echo "- Commit: \`$HEAD_SHA\`"
   echo "- Base: \`$BASE_REF\` at \`${BASE_SHA:-unknown}\`"
   echo "- Tree: $TREE"
-  echo "- go: ${V_GO:-not installed} (workflows: 1.26.10)"
+  echo "- go: ${V_GO:-not installed} (workflows: 1.26.11)"
   echo "- flutter: ${V_FLUTTER:-not installed} (workflows: 3.29.x)"
   echo "- node: ${V_NODE:-not installed} (workflows: 26 for Studio, 22 for the VS Code extension and the website)"
   echo "- linter: $LINTER (workflows: staticcheck@latest, the newest release on the day of the run)"

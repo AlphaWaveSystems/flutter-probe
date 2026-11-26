@@ -1,6 +1,6 @@
 module github.com/alphawavesystems/flutter-probe/studio
 
-go 1.26.10
+go 1.26.11
 
 // Always build against the local sibling module rather than the published
 // version on proxy.golang.org. The studio MVP depends on internal/* APIs
@@ -25,7 +25,7 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gorilla/websocket v1.5.3
+	github.com/gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4
 	github.com/jchv/go-winloader v0.0.0-20210711035445-715c2860da7e // indirect
 	github.com/labstack/echo/v4 v4.16.1 // indirect
 	github.com/labstack/gommon v0.5.0 // indirect
