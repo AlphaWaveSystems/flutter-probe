@@ -322,8 +322,8 @@ func TestLegalPagesKeepTheirRequiredClauses(t *testing.T) {
 		"terminos":            {"con al menos 30 días de anticipación": 3, "PERIODO DE DOCE MESES": 1, "DOCE MESES ANTERIORES": 1, "dentro de los 60 días": 1, "prevalece la versión en español": 1},
 		"privacy":             {"15 business days": 2, "20 business days": 1, "the licence key we issue to the team": 1, "sets no cookies": 2, "has no analytics": 1, "when it verifies the run": 1, "From a valid token we may keep": 1, "and never writes it to storage": 1},
 		"aviso-de-privacidad": {"15 días hábiles": 2, "20 días hábiles": 1, "la clave de licencia que emitimos al equipo": 1, "cuando verifica la ejecución": 1, "De un token válido podemos conservar": 1, "y nunca la escribe en almacenamiento": 1, "no instala cookies": 2, "no tiene analítica": 1, "prevalece la versión en español": 1},
-		"refunds":             {"within 60 days": 1, "a dispute that covers the current period is open": 1, "for reasons attributable to us": 1, "we refund or credit what the law requires": 1, "we refund the difference": 1, "we refund the part of the period that was not provided": 1},
-		"reembolsos":          {"dentro de los 60 días": 1, "una aclaración que abarque el periodo en curso": 1, "por causas imputables a nosotros": 1, "reembolsamos o bonificamos lo que la ley exija": 1, "reembolsamos la diferencia": 1, "reembolsamos la parte del periodo que no se prestó": 1, "prevalece la versión en español": 1},
+		"refunds":             {"within 60 days": 1, "a dispute that covers the current period is open": 1, "except where the law requires a refund": 1, "Paid plans and usage charges are not refunded": 1, "charge you twice for the same period": 1, "charge you in error": 1},
+		"reembolsos":          {"dentro de los 60 días": 1, "una aclaración que abarque el periodo en curso": 1, "salvo cuando la ley exija un reembolso": 1, "Los planes de pago y los cargos por uso no se reembolsan": 1, "se le cobre dos veces por el mismo periodo": 1, "se le cobre por error": 1, "prevalece la versión en español": 1},
 	}
 	for page, want := range counted {
 		src := readSite(t, "src/pages/"+page+".astro")
