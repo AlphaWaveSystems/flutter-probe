@@ -175,8 +175,8 @@ func TestSiteTruthFailsEachFalseClaim(t *testing.T) {
 		{"priority support", cloud, "</Site>", "<p>Priority support.</p></Site>", []string{cloud, `"Priority support"`}},
 		{"pay-per-use", cloud, "</Site>", "<p>Pay per use for agents.</p></Site>", []string{cloud, `"Pay per use"`, "not buyable"}},
 		{"uploads from any CI", cloud, "</Site>", "<p>Upload reports from any CI.</p></Site>", []string{cloud, "any CI", "GitHub Actions only"}},
-		{"cancel any time", cloud, "</Site>", "<p>Cancel anytime.</p></Site>", []string{cloud, `"Cancel anytime"`, "legal review"}},
-		{"a 14-day refund", cloud, "</Site>", "<p>A 14-day refund.</p></Site>", []string{cloud, `"14-day"`, "legal review"}},
+		{"cancel any time", cloud, "</Site>", "<p>Cancel anytime.</p></Site>", []string{cloud, `"Cancel anytime"`, "stated only in the refund and cancellation policy"}},
+		{"a 14-day refund", cloud, "</Site>", "<p>A 14-day refund.</p></Site>", []string{cloud, `"14-day"`, "stated only in the refund and cancellation policy"}},
 		{"gate", cloud, "</Site>", "<p>A gate on pull requests.</p></Site>", []string{cloud, `"gate"`, "verdict and failures list"}},
 		{"gating", index, "</Site>", "<p>Gating merges on results.</p></Site>", []string{index, `"Gating merges"`}},
 		{"a banned claim in the page description", pricing, "Design partners are being invited.\"", "Design partners get priority support.\"",
@@ -196,7 +196,7 @@ func TestSiteTruthFailsEachFalseClaim(t *testing.T) {
 		{"a results count with a non-breaking space", index, "</Site>", "<p>Up to 10,000&nbsp;results a month.</p></Site>",
 			[]string{index, `"10,000`, "not the results_per_month of any plan"}},
 		{"a refund stated with no link to the refund policy", pricing, `<p class="note">`, "<p>Full refund within 30 days.</p><p class=\"note\">",
-			[]string{pricing, `"refund"`, "refund terms wait for the legal review"}},
+			[]string{pricing, `"refund"`, "name a refund only next to the link to /refunds/"}},
 		{"alerts in Slack", cloud, "</Site>", "<p>Alerts in Slack for every failed run.</p></Site>", []string{cloud, `"Alerts in Slack"`, "not built"}},
 		{"another form of this repository behind a plain label", pricing, `href="https://github.com/AlphaWaveSystems/flutter-probe/issues/new?template=design-partner.yml">Apply as a design partner`,
 			`href="https://github.com/AlphaWaveSystems/flutter-probe/issues/new?template=bug.yml">Tell us more`, []string{pricing, `"Tell us more"`, "an Apply link to"}},
@@ -567,6 +567,55 @@ func TestSiteTruthReviewCases(t *testing.T) {
 				}
 			default:
 				t.Fatalf("kind %q", c.Kind)
+			}
+		})
+	}
+}
+
+// The build is the publication gate of the legal pages: the Pages workflow runs only the build, so the truth check refuses a site whose
+// legal.json cannot be published (a draft version, no address, no telephone, no municipality) and passes one that is complete.
+func TestSiteTruthRefusesLegalDataThatCannotBePublished(t *testing.T) {
+	const complete = `{"version":"1.0.0","effective":"2026-11-17","company":{"name":"Example S.A. de C.V.","address":"Calle Ejemplo 1, Col. Ejemplo, 44100 Guadalajara, Jalisco, México","municipality":"Guadalajara","phone":"+52 33 0000 0000","email":"someone@example.com"}}`
+	cases := []struct {
+		name, old, new, want string
+	}{
+		{"complete", "", "", ""},
+		{"no address", `"address":"Calle Ejemplo 1, Col. Ejemplo, 44100 Guadalajara, Jalisco, México"`, `"address":""`, "company.address is empty"},
+		{"an address without a postcode", "44100 ", "", "five-digit postcode"},
+		{"an address outside Jalisco", "Jalisco, ", "", "five-digit postcode"},
+		{"no telephone", `"phone":"+52 33 0000 0000"`, `"phone":""`, "company.phone"},
+		{"no municipality", `"municipality":"Guadalajara"`, `"municipality":" "`, "company.municipality"},
+		{"a draft version", `"version":"1.0.0"`, `"version":"0.9.0"`, "is not a published version"},
+		{"a version in words", `"version":"1.0.0"`, `"version":"Draft"`, "is not a published version"},
+		{"a date that does not exist", "2026-11-17", "2026-02-30", "is not a date"},
+		{"no email", "someone@example.com", "", "company.email"},
+		{"no name", "Example S.A. de C.V.", " ", "company.name"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			site := copySite(t)
+			data := complete
+			if c.old != "" {
+				if strings.Count(data, c.old) != 1 {
+					t.Fatalf("%q is not once in the complete data", c.old)
+				}
+				data = strings.Replace(data, c.old, c.new, 1)
+			}
+			if err := os.MkdirAll(filepath.Join(site, "src", "data"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(site, "src", "data", "legal.json"), []byte(data), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			out, ok := runTruth(t, site)
+			if c.want == "" {
+				if !ok {
+					t.Fatalf("complete legal data is refused:\n%s", out)
+				}
+				return
+			}
+			if ok || !strings.Contains(out, c.want) {
+				t.Fatalf("passed = %v, want a refusal that says %q:\n%s", ok, c.want, out)
 			}
 		})
 	}

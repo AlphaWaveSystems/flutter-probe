@@ -12,17 +12,14 @@
 //     Upgrade, or a link whose label is such a word (with "now" or a plan name) or whose target looks like a checkout,
 //   - links an Apply control (a link to this repository's new-issue form, or whose label is "Apply", "Apply now", "Apply as a design
 //     partner", "Apply by email"...) anywhere but the design-partner form (extra query parameters allowed) or the support address,
-//   - names a feature that is not built or an offer that waits for the legal review, as a claim (BANNED; a refund is named only next to
-//     the refund policy: a link to /refunds/ in its paragraph or <details> block, or a sentence that does nothing but point to the policy;
-//     "money-back" only as a whole sentence that is a plain "there is no money-back offer"; "upload" (or sending reports to the cloud) and
-//     "any CI" in one paragraph that has no sentence about uploads saying where they work ("GitHub Actions" with "only", "today" or
-//     "for now", no other CI named), or that has a sentence about uploads or a CI that looks ahead ("next", "soon", "on the way"),
-//     or that promises uploads in the clause of "any CI"),
+//   - names a feature that is not built, or states cancellation or refund terms in its own words, as a claim (BANNED; a refund is named only next to
+//     the link to the refund policy, in its paragraph or <details> block; "upload" and "any CI" in one paragraph that does not say
+//     "GitHub Actions only"),
 //   - has a structured-data Offer or AggregateOffer (JSON-LD, in the front matter or a script) with a price that is not an available
 //     plan's, or with none,
 //   - or claims a gate ("quality gate", "gate your pull requests", "release gating": not "gateway", "Gated", "Bill Gates").
-// This is a text guard: it catches the natural wordings of these claims (and is tested on the ones a review found), it is not a proof
-// that no page makes one. A claim in a wording nobody thought of can pass; the review of a page is still a person's.
+// It also fails while src/data/legal.json cannot be published (legalProblems): the legal pages state a version in effect and refer to the
+// company's address, so the site is not deployed with a draft version, a bad date, no address or no telephone.
 // Prices, results counts, cards and buy controls are read from prose only: code blocks and inline code are skipped (a shell's "$1" is not
 // a price). The other rules read code too.
 //
@@ -42,7 +39,8 @@ export const PAGES = [
 // Read for prices, plans and claims too (every page shows the layout; llms.txt is what AI tools read about the product).
 export const EXTRA = ['src/layouts/Site.astro', 'src/layouts/Legal.astro', 'public/llms.txt'];
 
-// Claims the pages must not make: features that are not built, offers that wait for the legal pages. Each is a claim phrase, so the plain
+// Claims the pages must not make: features that are not built, and cancellation or refund terms in a sales page's own words (the refund and
+// cancellation policy states them once, in /refunds/ and /reembolsos/, which this list does not read). Each is a claim phrase, so the plain
 // word ("your own Slack channel", "the role of a widget") stays allowed.
 export const BANNED = [
   [/\b(?:slack|microsoft teams|teams|e-?mail)\s+(?:notifications?|alerts?|integrations?|app|bot)\b/i, 'Slack, Teams and email notifications are not built'],
@@ -52,8 +50,8 @@ export const BANNED = [
   [/\bpriority support\b/i, 'priority support is not offered'],
   [/\bpay[- ]per[- ]use\b/i, 'pay-per-use is not buyable'],
   [/\bcosts? extra\b/i, 'no price is announced for anything billed separately'],
-  [/\bcancel (?:at )?any ?time\b/i, 'cancellation terms wait for the legal review'],
-  [/\b14[- ]?days?\b(?=[^.!?\n]{0,40}\b(?:refund|money|trial|guarantee)\b)/i, 'refund terms wait for the legal review'],
+  [/\bcancel (?:at )?any ?time\b/i, 'cancellation terms are stated only in the refund and cancellation policy: link to /refunds/'],
+  [/\b14[- ]?days?\b(?=[^.!?\n]{0,40}\b(?:refund|money|trial|guarantee)\b)/i, 'refund terms are stated only in the refund and cancellation policy: link to /refunds/'],
 ];
 // A gate as a claim about what the product does to pull requests, merges or releases. "Gated builds" (a CI term) is not one.
 const GATE = /\b(?:quality|merge|release|deploy(?:ment)?|ci|pr|build|hosted|commit)\s+gat(?:e|es|ing)\b|\bgat(?:e|es|ed|ing)\s+(?:(?:on|for|at|your|the|our|their|its|this|that|these|those|a|an|every|each|all|any|of|and|one|single|whole|entire|new|open|incoming|individual)\s+){0,4}(?:pull[-\s]+requests?|prs?|merges?|deploys?|deployments?|releases?|commits?)\b/gi;
@@ -388,7 +386,7 @@ export function checkPage(file, raw, plans, apply) {
     const onlyPolicy = (x) => POLICY_SENTENCE.test(norm(x));
     if (!sentences.some((x) => REFUND_PROMISE.test(x)) && sentences.some(onlyPolicy) && sentences.every((x) => !REFUND_TEST.test(x) || onlyPolicy(x))) continue;
     seenRefund.add(s);
-    at(m.index, m[0], 'refund terms wait for the legal review: name a refund only next to the link to /refunds/, or in a sentence that only points to the refund policy');
+    at(m.index, m[0], 'refund terms are stated only in the refund and cancellation policy: name a refund only next to the link to /refunds/, or in a sentence that only points to the refund policy');
   }
   // "Money-back" (also "moneyback") is an offer, except in a sentence that is nothing but a plain denial with one mention: "There is no
   // money-back offer yet.", "We never offer a money-back guarantee." A second clause, a second mention or any other ending fails.
@@ -396,7 +394,7 @@ export function checkPage(file, raw, plans, apply) {
     const [a, b] = sentenceSpan(m.index);
     const sentence = textOf(text.slice(a, b)).replace(/\u2019/g, "'").replace(/\s+/g, ' ').trim();
     if (PLAIN_MONEY_BACK_DENIAL.test(sentence)) continue;
-    at(m.index, m[0], 'refund terms wait for the legal review: "money-back" passes only in a sentence that is a plain denial ("There is no money-back offer yet.")');
+    at(m.index, m[0], 'refund terms are stated only in the refund and cancellation policy: "money-back" passes only in a sentence that is a plain denial ("There is no money-back offer yet.")');
   }
   // Reports work in any CI; uploads do not. A paragraph that talks about uploads (or sending reports to the cloud) and says "any CI" must
   // have (1) a sentence about uploads that says GitHub Actions with "only", "today" or "for now", names no other CI and does not say it
@@ -426,6 +424,25 @@ export function checkPage(file, raw, plans, apply) {
   return problems;
 }
 
+// What stops src/data/legal.json from being published. The legal pages print its version and date and refer to "our address stated in
+// section 1", so a deploy with a draft version, an impossible date or no address would publish terms that point at nothing.
+// scripts/site_legal_pages_test.go checks the same file and is stricter on two points: it wants the exact company name and support address.
+export function legalProblems(legal) {
+  const out = [];
+  const c = legal.company || {};
+  if (!/^[1-9]\d*\.\d+\.\d+$/.test(legal.version || '')) out.push(`legal.json: version "${legal.version}" is not a published version (1.0.0 or later)`);
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(legal.effective || '') ? new Date(`${legal.effective}T00:00:00Z`) : null;
+  if (!d || Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== legal.effective) out.push(`legal.json: effective "${legal.effective}" is not a date (YYYY-MM-DD)`);
+  if (!(c.name || '').trim()) out.push('legal.json: company.name is empty');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c.email || '')) out.push('legal.json: company.email is not an email address');
+  const address = (c.address || '').trim();
+  if (!address) out.push('legal.json: company.address is empty: the terms and the privacy notice must state the address before they are published');
+  else if (!/\b\d{5}\b/.test(address) || !/Jalisco/.test(address)) out.push('legal.json: company.address needs the street and number, the colonia, the municipality, a five-digit postcode and "Jalisco"');
+  if ((c.phone || '').replace(/\D/g, '').length < 10) out.push('legal.json: company.phone is empty or has fewer than 10 digits: consumer law asks for a telephone number next to the address');
+  if (!(c.municipality || '').trim()) out.push('legal.json: company.municipality is empty: the terms name the courts of that municipality');
+  return out;
+}
+
 export function check(site) {
   const { plans, apply, problems } = loadSellable(site);
   if (problems.length) return problems;
@@ -436,6 +453,9 @@ export function check(site) {
     out.push(`sellable.json: apply.form names the template ${template}, which is not in .github/ISSUE_TEMPLATE`);
   }
   for (const page of [...PAGES, ...EXTRA]) out.push(...checkPage(page, readFileSync(join(site, page), 'utf8'), plans, apply));
+  // A site without the file has no legal pages to publish (the build of the real site fails without it: Legal.astro imports it).
+  const legal = join(site, 'src/data/legal.json');
+  if (existsSync(legal)) out.push(...legalProblems(JSON.parse(readFileSync(legal, 'utf8'))));
   return out;
 }
 

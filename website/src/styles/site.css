@@ -179,7 +179,7 @@ footer { border-top: 1px solid var(--border); max-width: 1200px; margin: 0 auto;
 .install-box button:hover { border-color: var(--accent); color: var(--accent); }
 .install p { color: var(--muted); font-size: 0.85rem; }
 
-/* Prose pages: Probe Cloud, contact, terms, privacy, refunds, and later subprocessors and company */
+/* Prose pages: Probe Cloud and the legal pages (terms, privacy, refunds, subprocessors, company, contact) in English and Spanish */
 .prose { max-width: 760px; margin: 0 auto; padding: 3rem var(--gutter) 4rem; line-height: 1.7; }
 .prose h1 { font-size: clamp(1.8rem, 4vw, 2.2rem); font-weight: 800; margin-bottom: 0.6rem; letter-spacing: -0.02em; }
 .prose h2 { font-size: 1.25rem; margin: 2rem 0 0.5rem; }
@@ -187,7 +187,7 @@ footer { border-top: 1px solid var(--border); max-width: 1200px; margin: 0 auto;
 .prose p + p { margin-top: 0.75rem; }
 .prose ul { margin: 0.5rem 0 0.5rem 1.4rem; }
 .prose .updated { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.25rem; }
-.prose .draft { border: 1px solid var(--amber); color: var(--amber); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1.5rem; font-size: 0.95rem; }
+.prose .entity { border-left: 3px solid var(--border); padding-left: 1rem; margin: 0.75rem 0; }
 
 @media (max-width: 768px) {
   .arch { grid-template-columns: 1fr; gap: 1rem; }

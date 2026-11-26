@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/build-demo.mjs && astro dev",
-    "build": "node scripts/check-truth.mjs && node scripts/build-demo.mjs && astro build",
+    "build": "node scripts/check-truth.mjs && node scripts/build-demo.mjs && astro build && node scripts/check-dist.mjs",
     "build:demo": "node scripts/build-demo.mjs",
     "check:truth": "node scripts/check-truth.mjs",
     "preview": "astro preview"
