@@ -9,7 +9,7 @@
 /// Lives in its own file (rather than server.dart, where it previously
 /// lived) so executor.dart can read it too without an executor.dart <->
 /// server.dart import cycle.
-const String probeAgentVersion = '0.28.0';
+const String probeAgentVersion = '0.28.1';
 
 /// Optional features this agent supports, reported in the `probe.ping` handshake as `capabilities`. The CLI refuses a
 /// step that needs one the agent does not report, before it sends the step, so an agent without it cannot pass that

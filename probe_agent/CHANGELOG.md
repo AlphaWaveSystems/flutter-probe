@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## 0.28.1 - 2026-11-26
+
+- No agent change (`flutter_probe_agent` is released in step with the CLI).
+
 ## 0.28.0 - 2026-11-26
 
 - Fixed: on an app that uses `package:material_ui` or `cupertino_ui` (Flutter 3.50+), `is enabled` passed on a disabled button: the agent reads the state from the classes of `package:flutter/material.dart` and `cupertino.dart`, and a control of the standalone packages has the same name but another class (issue #852). Until those packages are supported, `is enabled`, `is disabled` and `is checked` refuse ("cannot be evaluated"), negated steps too, when the target is, holds or is inside a control with the name of one the agent reads but not its class. The framework's own controls, and an app's own controls with other names, are read as before; an app class with one of those exact names is refused too. The rule goes by class names, so an `--obfuscate` release build does not refuse.
