@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Release process: the dogfood gate before a stable tag is about five minutes on the named devices, not about an hour.** `docs/ops/release-pipeline.md` and the dogfood-gate workflow say so. No code changes.
 
+### Fixed
+
+- **Release workflow: the GitHub release body is capped at 60 KB.** The 0.28.0 section (274,946 bytes) made the release action fail with "Argument list too long" on Linux, which left the release and the Homebrew update undone. A longer section is cut at a line, with a link to the full text at the tag.
+
 ## [0.28.0] - 2026-11-26
 
 ### Added
