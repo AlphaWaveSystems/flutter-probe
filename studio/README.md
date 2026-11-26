@@ -84,7 +84,7 @@ design. The runner becomes a library, not a child process.
 
 ## Prerequisites (when implementation lands)
 
-- Go 1.26.10+
+- Go 1.26.11+
 - [Wails CLI v2.10+](https://wails.io/docs/gettingstarted/installation)
 - Platform-specific WebView runtime:
   - **macOS**: WebKit (built in)
