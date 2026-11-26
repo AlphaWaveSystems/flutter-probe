@@ -570,3 +570,14 @@ func TestSwitchedOffPatternReadsTheFontSize(t *testing.T) {
 		}
 	}
 }
+
+// The two cases the owner has not decided (a service we stop during a paid period, a service unavailable for most of one) are not promised on any
+// legal page: the law decides them, and the refund and terms pages say so only through the carve-out.
+func TestUndecidedRefundCasesAreNotPromised(t *testing.T) {
+	promised := regexp.MustCompile(`(?i)refund any period paid for|reembolsamos cualquier periodo pagado|a discontinued service|paid services that were unavailable|unavailable for a substantial part|for reasons attributable to us|por causas imputables a nosotros`)
+	for _, page := range []string{"refunds", "reembolsos", "terms", "terminos"} {
+		if m := promised.FindString(readSite(t, "src/pages/"+page+".astro")); m != "" {
+			t.Errorf("%s.astro promises %q: the law decides the cases the owner has not decided", page, m)
+		}
+	}
+}
