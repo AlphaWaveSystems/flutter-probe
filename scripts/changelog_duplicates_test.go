@@ -44,9 +44,8 @@ func duplicateBullets(text string) map[string][]int {
 	return out
 }
 
-// knownDuplicates are two pairs that were already there when this check was written: each pair is an older and a newer wording of one bullet (a follow-up
-// that was added instead of edited), and which wording to keep is the owner of the bullet's call. Delete the entry when the pair is resolved; a new
-// duplicate is never added here.
+// knownDuplicates lists the bullets that appear twice in the Unreleased section while a follow-up decides which wording stays: each entry is
+// an older and a newer wording of one bullet, and the owner of that work decides. It is empty now: the release notes keep one wording of each bullet.
 var knownDuplicates = map[string]string{}
 
 // duplicateProblems says what is wrong given the duplicates found and the known ones: a duplicate that is not known, and a known one that is gone.
