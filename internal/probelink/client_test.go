@@ -399,6 +399,78 @@ func TestDialRefreshRetryIsBounded(t *testing.T) {
 	}
 }
 
+// A give-up must say how long the dial waited and name the settings that raise
+// it, whatever the last error was (here: nothing listening, so connection refused).
+func TestDialGiveUpErrorNamesWaitAndSetting(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, portStr, _ := net.SplitHostPort(ln.Addr().String())
+	port, _ := strconv.Atoi(portStr)
+	ln.Close()
+
+	_, err = DialWithOptions(context.Background(), DialOptions{
+		Host:        "127.0.0.1",
+		Port:        port,
+		DialTimeout: 1500 * time.Millisecond,
+	})
+	if err == nil {
+		t.Fatal("expected a dial error")
+	}
+	for _, want := range []string{"gave up after 1.5s", "--dial-timeout", "agent.dial_timeout"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should name the dial timeout setting (missing %q), got: %v", want, err)
+		}
+	}
+	if n := strings.Count(err.Error(), "1.5s"); n != 1 {
+		t.Errorf("the wait should be said once, found %d times in: %v", n, err)
+	}
+}
+
+// The same give-up hint must appear when the last error is not a refusal: the
+// agent port accepts and closes (unexpected EOF), or accepts and never answers
+// the handshake (the dial deadline cuts it short).
+func TestDialGiveUpHintAfterEOFAndStall(t *testing.T) {
+	cases := map[string]func(conn net.Conn){
+		"eof":   func(conn net.Conn) { conn.Close() },
+		"stall": func(conn net.Conn) { time.Sleep(5 * time.Second); conn.Close() },
+	}
+	for name, handle := range cases {
+		t.Run(name, func(t *testing.T) {
+			ln, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer ln.Close()
+			go func() {
+				for {
+					conn, err := ln.Accept()
+					if err != nil {
+						return
+					}
+					go handle(conn)
+				}
+			}()
+
+			port := ln.Addr().(*net.TCPAddr).Port
+			_, err = DialWithOptions(context.Background(), DialOptions{
+				Host:        "127.0.0.1",
+				Port:        port,
+				DialTimeout: 1500 * time.Millisecond,
+			})
+			if err == nil {
+				t.Fatal("expected a dial error")
+			}
+			for _, want := range []string{"gave up after 1.5s", "--dial-timeout", "agent.dial_timeout"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error should name the dial timeout setting (missing %q), got: %v", want, err)
+				}
+			}
+		})
+	}
+}
+
 func TestDialCallsOnConnectRefusedAndExplainsTimeout(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
