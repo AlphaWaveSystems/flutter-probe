@@ -425,7 +425,7 @@ run dart:
 
 ## License
 
-BSL 1.1 — free for all use except competing commercial hosted testing services. Converts to Apache 2.0 after 4 years per release.
+This extension is MIT-licensed (see `LICENSE`). It runs the `probe` CLI, which is licensed under the Business Source License 1.1: free for all use except competing commercial hosted testing services, and it converts to Apache 2.0 four years after each release. The [license FAQ](https://flutterprobe.dev/tools/license/) explains what that means for you.
 
 ## Device View (preview)
 

@@ -9,15 +9,15 @@ This page explains how we read the license for common situations. It is not lega
 
 ## What you may do
 
-Use FlutterProbe for any purpose, including production testing, at no charge. You may also copy it, change it and redistribute it, as the license allows.
+Use FlutterProbe for any purpose, including production testing, at no charge, except the one restriction below. You may also copy it, change it and redistribute it, as the license allows.
 
 ## What you may not do
 
 Provide a commercial hosted testing service that competes with FlutterProbe. If your use is not covered by the license, the license requires you to buy a commercial license from the licensor, its affiliates or an authorized reseller, or to stop using FlutterProbe for that use.
 
-## What "competes with FlutterProbe" means
+## How we read "competes with FlutterProbe"
 
-We read it as a service that people use in place of FlutterProbe: a hosted product that runs FlutterProbe tests for paying customers. Running your own tests with FlutterProbe, on your own machines, your CI or your own infrastructure, is not such a service.
+We read it as a hosted service, offered to others, that runs FlutterProbe tests for paying customers or gives them access to FlutterProbe itself, in place of FlutterProbe. Running your own tests with FlutterProbe, on your own machines, your CI or your own infrastructure, is not such a service. Neither is a consultancy using FlutterProbe on its own machines to test its clients' apps, as long as it does not give clients access to FlutterProbe.
 
 ## Examples
 
@@ -42,7 +42,7 @@ The license is source-available, not open source: its notice says it "is not an 
 
 ## Copies and warranties
 
-If you copy or redistribute FlutterProbe, include the license with each copy, as the license requires. The software is provided "as is", without warranties, as the license's disclaimer says.
+If you copy or redistribute FlutterProbe, include the license with each copy, as the license requires. The license provides the software "as is" and disclaims warranties, to the extent applicable law allows.
 
 ## Trademarks
 
