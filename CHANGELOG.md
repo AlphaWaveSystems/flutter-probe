@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Docs: the install snippets and the CI pins name 0.28.1, the release on pub.dev and on GitHub.** The agent snippets (`flutter_probe_agent: ^0.28.1`) replace the `^0.26.1`, `^0.9.3` and `^0.5.3` ones, which fetched an older agent than the CLI. The GitHub Actions, Bitrise and Codemagic examples pin the 0.28 release (`0.28.1`, or the `0.28.x` line in `probe.yaml`), and the installation page says which release has Studio archives (Apple-silicon macOS, Linux and Windows for v0.28.1). Documentation only.
 
+- **Docs: a proposal for a CLI update check** (`docs/proposals/cli-update-check.md`). On each run the CLI would check GitHub for a newer stable release and print one line on stderr. No code changes yet.
+
 ## [0.28.1] - 2026-11-26
 
 ### Changed
