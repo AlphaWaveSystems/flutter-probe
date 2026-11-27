@@ -9,7 +9,7 @@ Set `probe_version` in `probe.yaml` to the release the tests were written for, a
 
 ```yaml
 # probe.yaml
-probe_version: 0.25.x   # any 0.25 patch release; write 0.25.1 to pin one exact release
+probe_version: 0.28.x   # any 0.28 patch release; write 0.28.1 to pin one exact release
 ```
 
 ```yaml

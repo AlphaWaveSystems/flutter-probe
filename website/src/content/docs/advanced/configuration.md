@@ -12,7 +12,7 @@ project:
   name: "My App"
   app: com.example.myapp
 
-probe_version: 0.25.x          # pin the FlutterProbe CLI release; probe test stops before any test on another one
+probe_version: 0.28.x          # pin the FlutterProbe CLI release; probe test stops before any test on another one
 
 defaults:
   platform: ios

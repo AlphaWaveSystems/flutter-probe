@@ -23,7 +23,7 @@ jobs:
 
       - name: Install the probe CLI
         run: |
-          curl -fsSL -o probe https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v0.25.1/probe-linux-amd64
+          curl -fsSL -o probe https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v0.28.1/probe-linux-amd64
           chmod +x probe
           ./probe version
 

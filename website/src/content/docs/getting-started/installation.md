@@ -27,7 +27,7 @@ The install line names the tap in full on purpose: Homebrew's [tap documentation
 
 ### Option B — Pre-built binary (all platforms, good for CI)
 
-Each release ships three artifacts per OS / architecture: `probe` (CLI test runner, always required), `probe-mcp` (optional standalone MCP server for AI agents), and a Studio Beta Preview archive (optional desktop app; see [Optional: Install Studio](#optional-install-studio)). Download what you need from [GitHub Releases](https://github.com/AlphaWaveSystems/flutter-probe/releases/latest):
+Each release ships `probe` (CLI test runner, always required) and `probe-mcp` (optional standalone MCP server for AI agents) for every OS and architecture, and a Studio Beta Preview archive for Apple-silicon macOS, Linux and Windows (optional desktop app; see [Optional: Install Studio](#optional-install-studio)). Download what you need from [GitHub Releases](https://github.com/AlphaWaveSystems/flutter-probe/releases/latest):
 
 | Platform | CLI | MCP server |
 |---|---|---|
