@@ -75,8 +75,9 @@ type result struct {
 }
 
 // Start begins the check for a run. It makes no request when the check is off (PROBE_NO_UPDATE_CHECK, or
-// `probe prefs set update-check off`), when this build has no release version (a development build), when the folder for the stored
-// answer cannot be written, or when the stored answer is fresh. Otherwise it asks GitHub in the background and returns at once.
+// `probe prefs set update-check off`), when this build has no release version (a development build), or when the stored answer is
+// fresh. In a folder that cannot take the stored answer, or with an answer file that is a link, the stored answer is shown and no
+// request is made. Otherwise it asks GitHub in the background and returns at once.
 func Start(current string, getenv func(string) string, now time.Time) *Check {
 	stored := readCache()
 	h := &Check{current: current, stored: stored, done: make(chan result, 1)}
@@ -94,8 +95,9 @@ func Start(current string, getenv func(string) string, now time.Time) *Check {
 		return h
 	}
 	if !cacheWritable() {
-		// Without a folder to keep the answer in, a check could not help the next run, so it is not made.
-		h.unknown = true
+		// Without a folder to keep the answer in, a check could not help the next run, so no request is made. The stored answer is
+		// still shown, so a readable answer is not hidden.
+		h.done <- result{cache: stored}
 		return h
 	}
 	h.pending = true
@@ -103,8 +105,9 @@ func Start(current string, getenv func(string) string, now time.Time) *Check {
 		next, fresh := ask(current, now, stored)
 		updateCache(func(cur cache) cache {
 			if !fresh {
-				// A failed attempt counts as today's check too, so an offline machine does not ask again on every run.
-				if cur.CheckedAt < now.Unix() {
+				// A failed attempt counts as today's check too, so an offline machine does not ask again on every run. A check
+				// time that lies in the future is not a check, so it is corrected as well.
+				if cur.CheckedAt < now.Unix() || cur.CheckedAt > now.Unix()+60 {
 					cur.CheckedAt = now.Unix()
 				}
 				return cur
@@ -130,7 +133,40 @@ func (h *Check) Pending() bool {
 // updateCache changes the stored answer as it is on disk now, not as this run read it at its start. A background refresh therefore
 // never overwrites a choice made meanwhile, such as `probe prefs set update-check off`, or a newer answer from another run.
 func updateCache(change func(cache) cache) {
-	_ = writeCache(change(readCache()))
+	withCacheLock(func() {
+		_ = writeCache(change(readCache()))
+	})
+}
+
+// withCacheLock runs change while it holds the lock file beside the stored answer, so runs that write the answer take turns. A lock
+// left by a run that died is taken over after ten seconds. If the lock cannot be taken within about half a second, change runs
+// without it: the answer is still written, and only writes made at the same moment could collide.
+func withCacheLock(change func()) {
+	path, err := cachePath()
+	if err != nil {
+		change()
+		return
+	}
+	_ = os.MkdirAll(filepath.Dir(path), 0o700)
+	lock := path + ".lock"
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for {
+		f, err := os.OpenFile(lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err == nil {
+			_ = f.Close()
+			defer os.Remove(lock)
+			change()
+			return
+		}
+		if info, statErr := os.Stat(lock); statErr == nil && time.Since(info.ModTime()) > 10*time.Second {
+			_ = os.Remove(lock)
+		}
+		if time.Now().After(deadline) {
+			change()
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 }
 
 // cacheWritable reports whether the folder for the stored answer can take a file. It creates the folder if it is missing, then
@@ -142,6 +178,10 @@ func cacheWritable() bool {
 	}
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return false
+	}
+	if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
+		// A link, or any other non-file, at the answer path cannot take the answer, and the reader does not follow it.
 		return false
 	}
 	f, err := os.CreateTemp(dir, ".update-check-probe-*")
@@ -230,9 +270,13 @@ func Enabled() bool {
 
 // SetEnabled stores the person's choice (`probe prefs set update-check on|off`). The stored answer is kept.
 func SetEnabled(on bool) error {
-	c := readCache()
-	c.Enabled = &on
-	return writeCache(c)
+	var err error
+	withCacheLock(func() {
+		c := readCache()
+		c.Enabled = &on
+		err = writeCache(c)
+	})
+	return err
 }
 
 // release is the part of GitHub's answer that matters here.
