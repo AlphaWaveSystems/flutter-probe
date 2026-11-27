@@ -130,56 +130,43 @@ func (h *Check) Pending() bool {
 	return h.pending
 }
 
-// updateCache changes the stored answer as it is on disk now, not as this run read it at its start. A background refresh therefore
-// never overwrites a choice made meanwhile, such as `probe prefs set update-check off`, or a newer answer from another run.
+// updateCache changes the stored answer as it is on disk while the lock is held, not as this run read it at its start. A background
+// refresh therefore never overwrites a choice made meanwhile, such as `probe prefs set update-check off`, or a newer answer from another
+// run. A refresh that still finds the lock held after refreshLockWait skips its write: this run shows the answer it got, and the next run
+// asks again.
 func updateCache(change func(cache) cache) {
-	withCacheLock(func() {
+	_ = withCacheLock(refreshLockWait, func() {
 		_ = writeCache(change(readCache()))
 	})
 }
 
-// withCacheLock runs change while it holds the lock file beside the stored answer. It is best effort, not a guarantee: a lock left by
-// a run that died is taken over after ten seconds, and two runs that take over the same stale lock at the same moment can still
-// collide. A lock that a live run holds is not taken. After about 200 ms the write is made without it, so no run waits long. A folder
-// that cannot take a lock file, such as a read-only one, gets its write at once, without the lock.
-func withCacheLock(change func()) {
+// How long a run waits for the lock on the stored answer. The lock is held for one read and one write of a small file, so a wait this
+// long passes only when another run is stuck. A refresh runs in the background and gives up quickly; prefs set waits longer, because a
+// person is waiting for it. They are variables for tests only.
+var (
+	refreshLockWait = 200 * time.Millisecond
+	settingLockWait = 2 * time.Second
+)
+
+// errCacheBusy means another run held the lock on the stored answer for the whole wait. Nothing was written.
+var errCacheBusy = errors.New("the update-check setting is being written by another probe run; try again")
+
+// withCacheLock runs change while it holds the operating-system lock on the file beside the stored answer, waiting up to wait for it.
+// If the lock is still held after the wait, change does not run and the error is errCacheBusy. Any other error means the lock could not
+// be taken at all (no folder, or a link where the lock file should be), and change does not run either.
+func withCacheLock(wait time.Duration, change func()) error {
 	path, err := cachePath()
 	if err != nil {
-		change()
-		return
+		return err
 	}
 	_ = os.MkdirAll(filepath.Dir(path), 0o700)
-	lock := path + ".lock"
-	owner := fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano())
-	deadline := time.Now().Add(200 * time.Millisecond)
-	for {
-		f, err := os.OpenFile(lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		if err == nil {
-			_, _ = f.WriteString(owner)
-			_ = f.Close()
-			defer func() {
-				// Remove the lock only while it still carries this run's owner: a takeover may have replaced it.
-				if data, err := os.ReadFile(lock); err == nil && string(data) == owner {
-					_ = os.Remove(lock)
-				}
-			}()
-			change()
-			return
-		}
-		if !errors.Is(err, os.ErrExist) {
-			// The folder cannot take a lock file at all, so the write is made now, without one.
-			change()
-			return
-		}
-		if info, statErr := os.Stat(lock); statErr == nil && time.Since(info.ModTime()) > 10*time.Second {
-			_ = os.Remove(lock)
-		}
-		if time.Now().After(deadline) {
-			change()
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
+	release, err := acquireLock(path+".lock", wait)
+	if err != nil {
+		return err
 	}
+	defer release()
+	change()
+	return nil
 }
 
 // cacheWritable reports whether the folder for the stored answer can take a file. It creates the folder if it is missing, then
@@ -281,14 +268,17 @@ func Enabled() bool {
 	return c.Enabled == nil || *c.Enabled
 }
 
-// SetEnabled stores the person's choice (`probe prefs set update-check on|off`). The stored answer is kept.
+// SetEnabled stores the person's choice (`probe prefs set update-check on|off`). The stored answer is kept. A run that holds the lock for
+// a moment is waited for; if the lock stays busy, nothing is written and the error says so.
 func SetEnabled(on bool) error {
 	var err error
-	withCacheLock(func() {
+	if lockErr := withCacheLock(settingLockWait, func() {
 		c := readCache()
 		c.Enabled = &on
 		err = writeCache(c)
-	})
+	}); lockErr != nil {
+		return lockErr
+	}
 	return err
 }
 

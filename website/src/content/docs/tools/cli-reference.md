@@ -223,6 +223,8 @@ Nothing is printed when the check fails or the machine is offline. Only a run th
 
 Turn the check off with `PROBE_NO_UPDATE_CHECK=1` (any value other than `0` or `false`), or with `probe prefs set update-check off`. Either one is enough. The last answer is kept in `update-check.json` in your user configuration folder, private to you. The request goes to `api.github.com`, like any GitHub API request: it carries the FlutterProbe version, the operating system and the processor type in its `User-Agent` header, and GitHub sees your network address.
 
+The answer file is locked by the operating system while a run writes it. A background refresh that finds it busy skips its write, and the next run asks again. `probe prefs set update-check` waits up to 2 seconds for another run's write, then says the setting is busy and writes nothing.
+
 `probe doctor` adds an update line when this run made the check (the runs listed above make none) and the check has an answer. The MCP server offers the same answer through the read-only `update_status` tool; see [MCP server](/tools/mcp/).
 
 ## probe report

@@ -70,14 +70,15 @@ func TestLinkedAnswerFileMakesNoRequest(t *testing.T) {
 	}
 }
 
-// TestStaleLockIsTakenOver: a lock left by a run that died does not delay a write, and it is removed once the write is made.
-func TestStaleLockIsTakenOver(t *testing.T) {
+// TestLeftoverLockFileDoesNotBlock: a lock file left by a run that died holds nothing, so it does not delay a write. The file stays: the
+// operating system, not the file, is the lock.
+func TestLeftoverLockFileDoesNotBlock(t *testing.T) {
 	dir, _ := sandbox(t, func(w http.ResponseWriter, r *http.Request) {})
 	lock := filepath.Join(dir, cacheName+".lock")
-	if err := os.WriteFile(lock, nil, 0o600); err != nil {
+	if err := os.WriteFile(lock, []byte("left by a run that died"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	old := time.Now().Add(-time.Minute)
+	old := time.Now().Add(-time.Hour)
 	if err := os.Chtimes(lock, old, old); err != nil {
 		t.Fatal(err)
 	}
@@ -86,10 +87,7 @@ func TestStaleLockIsTakenOver(t *testing.T) {
 		t.Fatal(err)
 	}
 	if waited := time.Since(start); waited > 400*time.Millisecond {
-		t.Errorf("a stale lock delayed the write by %v", waited)
-	}
-	if _, err := os.Stat(lock); err == nil {
-		t.Error("the lock file was left behind")
+		t.Errorf("a leftover lock file delayed the write by %v", waited)
 	}
 	if Enabled() {
 		t.Error("the setting was not written")
