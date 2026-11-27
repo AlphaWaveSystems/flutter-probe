@@ -90,7 +90,7 @@ func Start(current string, getenv func(string) string, now time.Time) *Check {
 		h.unknown = true
 		return h
 	}
-	if age := now.Sub(time.Unix(stored.CheckedAt, 0)); stored.CheckedAt != 0 && age >= 0 && age < RefreshAfter {
+	if age := now.Sub(time.Unix(stored.CheckedAt, 0)); stored.CheckedAt != 0 && age >= -time.Minute && age < RefreshAfter {
 		h.done <- result{cache: stored}
 		return h
 	}
@@ -138,9 +138,10 @@ func updateCache(change func(cache) cache) {
 	})
 }
 
-// withCacheLock runs change while it holds the lock file beside the stored answer, so runs that write the answer take turns. A lock
-// left by a run that died is taken over after ten seconds. If the lock cannot be taken within about half a second, change runs
-// without it: the answer is still written, and only writes made at the same moment could collide.
+// withCacheLock runs change while it holds the lock file beside the stored answer. It is best effort, not a guarantee: a lock left by
+// a run that died is taken over after ten seconds, and two runs that take over the same stale lock at the same moment can still
+// collide. A lock that a live run holds is not taken. After about 200 ms the write is made without it, so no run waits long. A folder
+// that cannot take a lock file, such as a read-only one, gets its write at once, without the lock.
 func withCacheLock(change func()) {
 	path, err := cachePath()
 	if err != nil {
@@ -149,12 +150,24 @@ func withCacheLock(change func()) {
 	}
 	_ = os.MkdirAll(filepath.Dir(path), 0o700)
 	lock := path + ".lock"
-	deadline := time.Now().Add(500 * time.Millisecond)
+	owner := fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano())
+	deadline := time.Now().Add(200 * time.Millisecond)
 	for {
 		f, err := os.OpenFile(lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err == nil {
+			_, _ = f.WriteString(owner)
 			_ = f.Close()
-			defer os.Remove(lock)
+			defer func() {
+				// Remove the lock only while it still carries this run's owner: a takeover may have replaced it.
+				if data, err := os.ReadFile(lock); err == nil && string(data) == owner {
+					_ = os.Remove(lock)
+				}
+			}()
+			change()
+			return
+		}
+		if !errors.Is(err, os.ErrExist) {
+			// The folder cannot take a lock file at all, so the write is made now, without one.
 			change()
 			return
 		}
