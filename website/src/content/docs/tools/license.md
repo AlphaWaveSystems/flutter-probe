@@ -17,7 +17,7 @@ Provide a commercial hosted testing service that competes with FlutterProbe. If 
 
 ## How we read "competes with FlutterProbe"
 
-We read it as a hosted service, offered to others, that runs FlutterProbe tests for paying customers or gives them access to FlutterProbe itself, in place of FlutterProbe. Running your own tests with FlutterProbe, on your own machines, your CI or your own infrastructure, is not such a service. Neither is a consultancy using FlutterProbe on its own machines to test its clients' apps, as long as it does not give clients access to FlutterProbe.
+We read it as a hosted service, offered to others, that runs FlutterProbe tests for paying customers or gives them access to FlutterProbe itself, in place of FlutterProbe. Running your own tests with FlutterProbe, on your own machines, your CI or your own infrastructure, is not such a service. Neither is a consultancy using FlutterProbe on its own machines and CI to test its clients' apps, as long as it does not give clients access to FlutterProbe.
 
 ## Examples
 
