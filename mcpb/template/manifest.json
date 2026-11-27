@@ -17,7 +17,7 @@
   },
   "documentation": "https://flutterprobe.dev/tools/mcp/",
   "support": "https://github.com/AlphaWaveSystems/flutter-probe/issues",
-  "license": "BSL-1.1",
+  "license": "BUSL-1.1",
   "keywords": ["flutter", "testing", "e2e", "probe", "mobile", "android", "ios"],
   "server": {
     "type": "binary",

@@ -60,6 +60,7 @@ export default defineConfig({
           label: 'Tools',
           items: [
             { label: 'CLI Reference', slug: 'tools/cli-reference' },
+            { label: 'License and use', slug: 'tools/license' },
             { label: 'probe-convert', slug: 'tools/probe-convert' },
             { label: 'VS Code Extension', slug: 'tools/vscode' },
             { label: 'Studio (Beta)', slug: 'tools/studio' },
