@@ -10,7 +10,7 @@ and emits matching `.probe` test files into `tests/generated/`.
 ```yaml
 dependencies:
   flutter_probe_annotation: ^0.9.3
-  flutter_probe_agent: ^0.9.3
+  flutter_probe_agent: ^0.28.1
 
 dev_dependencies:
   flutter_probe_gen: ^0.9.3

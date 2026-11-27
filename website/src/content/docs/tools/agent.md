@@ -20,7 +20,7 @@ sign-in sheet): those are handled by [System dialogs](/tools/system-dialogs/).
 ```yaml
 # pubspec.yaml
 dependencies:
-  flutter_probe_agent: ^0.26.1
+  flutter_probe_agent: ^0.28.1
 ```
 
 ```dart

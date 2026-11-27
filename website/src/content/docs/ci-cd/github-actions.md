@@ -9,7 +9,7 @@ Set `probe_version` in `probe.yaml` to the release the tests were written for, a
 
 ```yaml
 # probe.yaml
-probe_version: 0.25.x   # any 0.25 patch release; write 0.25.1 to pin one exact release
+probe_version: 0.28.x   # any 0.28 patch release; write 0.28.1 to pin one exact release
 ```
 
 ```yaml
@@ -45,7 +45,7 @@ jobs:
       - name: Install the probe CLI
         run: |
           sudo curl --fail --silent --show-error --location -o /usr/local/bin/probe \
-            https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v0.27.0/probe-darwin-arm64
+            https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v0.28.1/probe-darwin-arm64
           sudo chmod +x /usr/local/bin/probe
 
       - name: Boot iOS simulator
@@ -93,7 +93,7 @@ jobs:
       - name: Install the probe CLI
         run: |
           sudo curl --fail --silent --show-error --location -o /usr/local/bin/probe \
-            https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v0.27.0/probe-linux-amd64
+            https://github.com/AlphaWaveSystems/flutter-probe/releases/download/v0.28.1/probe-linux-amd64
           sudo chmod +x /usr/local/bin/probe
 
       - name: Enable KVM

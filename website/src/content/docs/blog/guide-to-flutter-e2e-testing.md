@@ -48,7 +48,7 @@ Add the FlutterProbe Dart agent to your app's dev dependencies:
 ```yaml
 # pubspec.yaml
 dev_dependencies:
-  flutter_probe_agent: ^0.5.3
+  flutter_probe_agent: ^0.28.1
 ```
 
 Initialize the agent in your app's main function:
