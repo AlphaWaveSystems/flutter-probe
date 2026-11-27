@@ -13,7 +13,7 @@ Use FlutterProbe for any purpose, including production testing, at no charge. Yo
 
 ## What you may not do
 
-Provide a commercial hosted testing service that competes with FlutterProbe. If your use is not covered by the license, the license requires you to buy a commercial license from the licensor or to stop using FlutterProbe for that use.
+Provide a commercial hosted testing service that competes with FlutterProbe. If your use is not covered by the license, the license requires you to buy a commercial license from the licensor, its affiliates or an authorized reseller, or to stop using FlutterProbe for that use.
 
 ## What "competes with FlutterProbe" means
 
