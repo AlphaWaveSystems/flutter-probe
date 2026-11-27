@@ -3,7 +3,7 @@ title: License and use
 description: What the FlutterProbe license allows for internal and production use, CI, consultants and hosted services, and when each version becomes Apache 2.0.
 ---
 
-FlutterProbe's command-line tools and the rest of the repository are licensed under the [Business Source License 1.1](https://github.com/AlphaWaveSystems/flutter-probe/blob/main/LICENSE). The Dart agent that runs inside your app, the `probe_annotation` and `probe_gen` packages, the GitHub Action and the Bitrise step are licensed under the MIT license.
+FlutterProbe's command-line tools and the rest of the repository are licensed under the [Business Source License 1.1](https://github.com/AlphaWaveSystems/flutter-probe/blob/main/LICENSE), except the MIT-licensed packages below. The Dart agent that runs inside your app, the `probe_annotation` and `probe_gen` packages, the GitHub Action, the Bitrise step and the VS Code extension are licensed under the MIT license.
 
 This page explains how we read the license for common situations. It is not legal advice, and it does not change the license. If this page and the license text ever differ, the license text governs.
 
