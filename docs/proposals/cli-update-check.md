@@ -15,8 +15,8 @@ Each time `probe` runs, it checks GitHub for a newer stable release. If there is
 
 ## Behaviour
 - The check runs in the background. The command never waits for it. The notice prints at exit, and only if the answer arrived within a 1.5-second budget.
-- The notice is one line on stderr, for example: `A new FlutterProbe version is available: 0.29.0 (you have 0.28.1). Update: brew upgrade probe`. When the binary sits under Homebrew's prefix the hint is `brew upgrade probe`; otherwise it links to the release page.
-- Silent in CI, with `--quiet`, with `--format json` or `junit`, when stderr is not a terminal, and on dev builds (version `dev`).
+- The notice is one line on stderr, for example: `A new FlutterProbe version is available: 0.29.0 (you have 0.28.1). Update: brew upgrade probe`. When the binary sits under Homebrew's prefix the hint is `brew upgrade probe`; otherwise it links to the release page. A canary installed as `probe@next` gets the switch back to stable instead: `brew uninstall probe@next && brew install AlphaWaveSystems/tap/probe`.
+- Silent in CI, with `--format json` or `junit`, when stderr is not a terminal, in `probe mcp-server` (the MCP stdio path inside `probe`), and on dev builds (version `dev`). There is no `--quiet` flag today; the rule applies to one if it is added.
 - Offline, timeouts, rate limits and malformed answers are all silent.
 - Versions are compared as semver against the latest stable release. A `-next.N` build compares its base version.
 
@@ -33,12 +33,12 @@ Each time `probe` runs, it checks GitHub for a newer stable release. If there is
 - A new package, `internal/updatecheck`: the request, the comparison, the message and the cache.
 - `probe version` and `probe doctor` read the same cached status.
 - `internal/userprefs` gains an `update-check` preference, following the existing `clear-data-without-asking` pattern.
-- `cmd/probe-mcp` does not run the check, and its stdout is untouched.
+- `cmd/probe-mcp` and `probe mcp-server` (`internal/cli/mcp.go`) do not run the check, and their stdout is untouched.
 
 ## MCP (the owner's rule)
 - A new read-only, free MCP tool reports the update status: the current version, the latest stable version and whether an update is available.
 - Before the feature counts as done, it is verified through the real MCP stdio path: the notice never reaches stdout, the tool answers, and the opt-out stops the requests.
-- `docs/wiki/mcp.md` (or the MCP docs page) and the tool description are updated, per the existing rule.
+- `website/src/content/docs/tools/mcp.md` and the tool description are updated, per the existing rule.
 
 ## Tests
 - Semver: prereleases, `-next.N`, equal, older and malformed versions.
