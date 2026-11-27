@@ -18,7 +18,7 @@ Each time `probe` runs, it checks GitHub for a newer stable release. If there is
 - The notice is one line on stderr, for example: `A new FlutterProbe version is available: 0.29.0 (you have 0.28.1). Update: brew upgrade probe`. When the binary sits under Homebrew's prefix the hint is `brew upgrade probe`; otherwise it links to the release page. A canary installed as `probe@next` gets the switch back to stable instead: `brew uninstall probe@next && brew install AlphaWaveSystems/tap/probe`.
 - Silent in CI, with `--format json` or `junit`, when stderr is not a terminal, in `probe mcp-server` (the MCP stdio path inside `probe`), and on dev builds (version `dev`). There is no `--quiet` flag today; the rule applies to one if it is added.
 - Offline, timeouts, rate limits and malformed answers are all silent.
-- Versions are compared as semver against the latest stable release. A `-next.N` build compares its base version.
+- Versions are compared as semver against the latest stable release. A `-next.N` build is compared as a full version, so the stable release with the same number, and any later one, is newer than it (0.29.0 is newer than 0.29.0-next.N).
 
 ## Opt-out and privacy
 - `PROBE_NO_UPDATE_CHECK=1` or `probe prefs set update-check off` stops every request, not only the notice.
