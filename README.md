@@ -1080,6 +1080,6 @@ Flutter 3.19+ with Dart 3.3+. The ProbeAgent uses `package:flutter/services.dart
 
 ## License
 
-[Business Source License 1.1](LICENSE) — free for all use except competing commercial hosted testing services. Converts to Apache 2.0 after 4 years per release.
+[Business Source License 1.1](LICENSE) — free for all use except competing commercial hosted testing services. Converts to Apache 2.0 after 4 years per release. The [license FAQ](https://flutterprobe.dev/tools/license/) says what that means for internal use, CI, consultancies and hosted services.
 
 Copyright © 2026 Alpha Wave Systems S.A. de C.V.

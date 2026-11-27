@@ -24,5 +24,5 @@
 @vscode/vsce-sign-win32-arm64@* | Microsoft's signing helper binary for vsce (build time); no licence field
 @vscode/vsce-sign-win32-x64@* | Microsoft's signing helper binary for vsce (build time); no licence field
 
-# --- this repository's own npm packages: their package.json has no "license" field (the licence split is an owner decision, kept out of this change)
-flutterprobe@* | the VS Code extension of this repository: package.json has no license field yet
+# --- this repository's own npm package: its package.json declares MIT since the licence change in PR #920; the real capture in testdata/ (2026-11-16) predates it, so this entry stays until the captures are remade, then it goes
+flutterprobe@* | the VS Code extension of this repository: captured as UNKNOWN at 0.27.0; package.json declares MIT since the licence change

@@ -36,7 +36,7 @@ Sources: [Maestro Flutter docs](https://docs.maestro.dev/get-started/supported-p
 
 - **The agent must be in the app build.** You add the `probe_agent` package and build with a flag. Maestro needs nothing like this.
 - **A new test language.** ProbeScript is small, but it is not Dart and not YAML. The [syntax reference](/probescript/syntax/) is the whole language.
-- **License.** The CLI is under the Business Source License 1.1, which allows any use except offering a competing hosted testing service. The Dart agent is MIT. If you require an OSI-approved license for every tool in your pipeline, Patrol and Appium fit that better. See the [LICENSE](https://github.com/AlphaWaveSystems/flutter-probe/blob/main/LICENSE).
+- **License.** The CLI is under the Business Source License 1.1, which allows any use except offering a competing hosted testing service. The Dart agent is MIT. If you require an OSI-approved license for every tool in your pipeline, Patrol and Appium fit that better. See the [LICENSE](https://github.com/AlphaWaveSystems/flutter-probe/blob/main/LICENSE) and the [license FAQ](/tools/license/).
 - **A younger project** with a smaller community than Maestro, Patrol or Appium.
 
 ## When each one is the better choice
