@@ -27,7 +27,7 @@ The install line names the tap in full on purpose: Homebrew's [tap documentation
 
 ### Option B — Pre-built binary (all platforms, good for CI)
 
-Each release ships three artifacts per OS / architecture: `probe` (CLI test runner, always required), `probe-mcp` (optional standalone MCP server for AI agents), and a Studio Beta Preview archive (optional desktop app; the v0.27.0 release has none, see [Optional: Install Studio](#optional-install-studio)). Download what you need from [GitHub Releases](https://github.com/AlphaWaveSystems/flutter-probe/releases/latest):
+Each release ships three artifacts per OS / architecture: `probe` (CLI test runner, always required), `probe-mcp` (optional standalone MCP server for AI agents), and a Studio Beta Preview archive (optional desktop app; see [Optional: Install Studio](#optional-install-studio)). Download what you need from [GitHub Releases](https://github.com/AlphaWaveSystems/flutter-probe/releases/latest):
 
 | Platform | CLI | MCP server |
 |---|---|---|
@@ -61,7 +61,7 @@ probe version
 
 ## Optional: Install Studio
 
-[FlutterProbe Studio](/tools/studio/) is a cross-platform desktop app for visual test authoring with an embedded device view. Download the archive for your platform from the GitHub Release. **The v0.27.0 release has no Studio archive**; the newest ones are on [v0.26.1](https://github.com/AlphaWaveSystems/flutter-probe/releases/tag/v0.26.1).
+[FlutterProbe Studio](/tools/studio/) is a cross-platform desktop app for visual test authoring with an embedded device view. Download the archive for your platform from the GitHub Release. The v0.28.1 release has Studio archives for Apple-silicon macOS, Linux (amd64) and Windows (amd64); there is no Intel-Mac archive.
 
 ```bash
 # macOS — extract the .app bundle and move to Applications
@@ -118,7 +118,7 @@ This adds the newest version published on [pub.dev](https://pub.dev/packages/flu
 
 ```yaml
 dev_dependencies:
-  flutter_probe_agent: ^0.26.1
+  flutter_probe_agent: ^0.28.1
 ```
 
 The agent is versioned separately from the CLI, so the newest agent on pub.dev can be one release behind the newest CLI. See [Compatibility](/advanced/compatibility/) for what a CLI and an agent of different versions can do together.

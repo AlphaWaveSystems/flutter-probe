@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 > At release time the version in `probe_agent/pubspec.yaml` and the one in `probe_agent/lib/src/agent_version.dart` are bumped in the same commit, and never in a feature change. A step is allowed by the capabilities an agent reports, not by its version number.
 
+### Changed
+
+- **Docs: the install snippets and the CI pins name 0.28.1, the release on pub.dev and on GitHub.** The agent snippets (`flutter_probe_agent: ^0.28.1`) replace the `^0.26.1`, `^0.9.3` and `^0.5.3` ones, which fetched an older agent than the CLI. The GitHub Actions, Bitrise and Codemagic examples pin `0.28.1`, and the installation page says which release has Studio archives (Apple-silicon macOS, Linux and Windows for v0.28.1). Documentation only.
+
 ## [0.28.1] - 2026-11-26
 
 ### Changed
