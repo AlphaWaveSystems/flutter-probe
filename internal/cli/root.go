@@ -53,9 +53,13 @@ func ExitCode(err error) int {
 	return 1
 }
 
-// Execute is the entry point called by main().
+// Execute is the entry point called by main(). The update check starts before the command runs and its notice is printed after it,
+// on stderr only; a failed check prints nothing (see updatecheck).
 func Execute() error {
-	return rootCmd.Execute()
+	runUpdateCheck = startUpdateCheck(os.Args[1:])
+	err := rootCmd.Execute()
+	printUpdateNotice(os.Stderr, runUpdateCheck)
+	return err
 }
 
 func init() {
@@ -88,4 +92,3 @@ func loadConfig(cmd *cobra.Command) (*config.Config, error) {
 	cfg.CLIVersion = Version
 	return cfg, nil
 }
-

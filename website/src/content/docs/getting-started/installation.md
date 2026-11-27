@@ -59,6 +59,8 @@ Verify:
 probe version
 ```
 
+On a terminal, a `probe` run also says in one line when a newer stable release exists; `brew upgrade probe`, or the release page, gets it. The check can be turned off with `PROBE_NO_UPDATE_CHECK=1` or `probe prefs set update-check off`. See [Update check](/tools/cli-reference/#update-check).
+
 ## Optional: Install Studio
 
 [FlutterProbe Studio](/tools/studio/) is a cross-platform desktop app for visual test authoring with an embedded device view. Download the archive for your platform from the GitHub Release. The v0.28.1 release has Studio archives for Apple-silicon macOS, Linux (amd64) and Windows (amd64); there is no Intel-Mac archive.

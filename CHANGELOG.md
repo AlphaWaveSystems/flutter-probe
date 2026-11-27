@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 > At release time the version in `probe_agent/pubspec.yaml` and the one in `probe_agent/lib/src/agent_version.dart` are bumped in the same commit, and never in a feature change. A step is allowed by the capabilities an agent reports, not by its version number.
 
+### Added
+
+- **The CLI says when a newer stable release exists, and `probe-mcp` can say so too.** On a terminal, a `probe` run checks GitHub for the latest stable release at most once a day, in the background, and prints one line on stderr when a newer one exists: `brew upgrade probe` for a Homebrew install, the release page otherwise. A failed or slow check prints nothing. The run that refreshes the stored answer waits up to 1.5 s for GitHub's reply, once a day; a reply slower than that is not kept, and the next day's run tries again. CI, piped output (including `/dev/null`), `--format json` or `junit`, a development build and `probe mcp-server` get no check and no extra text. A folder or answer file that cannot take the stored answer makes no request, and a readable stored answer is still shown. Turn it off with `PROBE_NO_UPDATE_CHECK=1` or `probe prefs set update-check off`, with or without global flags before `prefs`. `probe doctor` adds an update line when the run made the check and the check has an answer. New read-only MCP tool `update_status` (current, latest, update_available, source, release_url, checked_at). Documented in the CLI reference and the MCP page.
+
+### Fixed
+
+- **`probe mcp-server` reports the installed version.** Its MCP `initialize` answer said `dev`, because the embedded server never received the version the binary was built with. `probe-mcp` was not affected.
+
 ### Changed
 
 - **Docs: the install snippets and the CI pins name 0.28.1, the release on pub.dev and on GitHub.** The agent snippets (`flutter_probe_agent: ^0.28.1`) replace the `^0.26.1`, `^0.9.3` and `^0.5.3` ones, which fetched an older agent than the CLI. The GitHub Actions, Bitrise and Codemagic examples pin the 0.28 release (`0.28.1`, or the `0.28.x` line in `probe.yaml`), and the installation page says which release has Studio archives (Apple-silicon macOS, Linux and Windows for v0.28.1). Documentation only.

@@ -254,6 +254,9 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("unknown --format %q: use text or json", format)
 	}
 	checks := runDoctorChecks(ctx, realDoctorEnv(cmd), cfgPath)
+	if update, ok := updateDoctorCheck(); ok {
+		checks = append(checks, update)
+	}
 	if format == "json" {
 		return printDoctorJSON(cmd, checks)
 	}
