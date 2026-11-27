@@ -634,7 +634,7 @@ Studio binaries also ship as part of every GitHub release. See the dedicated [St
 
 ## MCP Server
 
-**`probe-mcp`** is a standalone binary that exposes all FlutterProbe capabilities to AI agents (Claude Desktop, Cursor, any MCP-compatible client) via 40 tools:
+**`probe-mcp`** is a standalone binary that exposes all FlutterProbe capabilities to AI agents (Claude Desktop, Cursor, any MCP-compatible client) via 41 tools:
 
 | Category | Tools |
 |---|---|
@@ -644,6 +644,7 @@ Studio binaries also ship as part of every GitHub release. See the dedicated [St
 | Studio | `studio_open_workspace`, `studio_list_devices`, `studio_connect` (a device id, or host/port/token for WiFi), `studio_run_file`, `studio_cancel`, `studio_run_state`, `studio_results`, `studio_screenshot`, `studio_widget_tree`, `studio_ui_state` (read-only: the inspector's tree, and the connection and run state) (needs Studio started with `PROBE_STUDIO_AUTOMATION=1`) |
 | Reporting | `get_report`, `generate_report`, `generate_test`, `triage_failure`, `system_dialog`, `perf_trend`, `perf_compare` |
 | Project | `init_project`, `validate_project`, `doctor`, `record` |
+| Update check | `update_status` (read-only: whether a newer stable release exists) |
 
 Every CLI feature is accessible from MCP. Key capabilities an agent can use:
 
@@ -667,7 +668,7 @@ Each release publishes a one-click `.mcpb` extension for Claude Desktop. No `bre
    - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
 2. In Claude Desktop, open **Settings → Extensions → Install Extension**, pick the `.mcpb` file.
 3. When prompted, select your **Flutter project directory** (the folder that contains `probe.yaml` and `tests/`).
-4. Done — all 40 tools appear in Claude.
+4. Done — all 41 tools appear in Claude.
 
 The bundle ships the `probe-mcp` binary inside the extension; auto-updates and lifecycle are managed by Claude Desktop.
 

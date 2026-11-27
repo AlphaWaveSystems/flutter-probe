@@ -36,6 +36,8 @@ embedded in the main `+"`probe`"+` binary. It will be removed in a future releas
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(os.Stderr,
 			"⚠  `probe mcp-server` is deprecated. Configure your MCP client to call `probe-mcp` directly.")
+		// The server reports this version in initialize and in update_status, as cmd/probe-mcp does.
+		mcp.Version = Version
 		if err := mcp.NewServer().Run(); err != nil {
 			fmt.Fprintln(os.Stderr, "Error:", err)
 			return err

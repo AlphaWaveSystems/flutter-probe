@@ -84,6 +84,8 @@ func TestToolsList(t *testing.T) {
 		"get_report", "generate_test", "generate_report", "triage_failure", "system_dialog", "perf_trend", "perf_compare",
 		// project management
 		"init_project", "validate_project", "doctor", "record",
+		// update check
+		"update_status",
 		// Probe Studio automation
 		"studio_open_workspace", "studio_list_devices", "studio_connect", "studio_run_file", "studio_cancel",
 		"studio_run_state", "studio_results", "studio_screenshot", "studio_widget_tree", "studio_ui_state",

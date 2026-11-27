@@ -9,7 +9,7 @@ description: Complete reference for all probe CLI commands and flags.
 |---------|-------------|
 | `probe init` | Scaffold `probe.yaml` and `tests/`, with a sample test that only opens the app. Set `project.app` in `probe.yaml` first |
 | `probe validate` | Check `probe.yaml` and the `probe_version` pin without connecting to a device. Exits non-zero when a check fails; `--format json` prints the report. Run it in CI before `probe test` |
-| `probe doctor` | Check that `probe.yaml`, the `tests/` folder, the Flutter SDK, the platform tools (`adb`, `xcrun`) and the visible devices are ready for `probe test`. Says how to fix what is missing and changes nothing. Exits non-zero only when `probe.yaml` or `tests/` is missing. `--format json` prints the report |
+| `probe doctor` | Check that `probe.yaml`, the `tests/` folder, the Flutter SDK, the platform tools (`adb`, `xcrun`) and the visible devices are ready for `probe test`. Says how to fix what is missing and changes nothing. Exits non-zero only when `probe.yaml` or `tests/` is missing. `--format json` prints the report. When the update check has an answer, it adds an update line (see [Update check](#update-check)) |
 | `probe test [path]` | Run `.probe` test files |
 | `probe lint [path]` | Validate `.probe` files without running them: syntax errors, steps and recipe calls that resolve to nothing, and selectors that can never match fail the command; unresolved placeholders, count or zero-state text checks and a recipe name that a call cannot reach warn |
 | `probe perf trend` / `probe perf compare` | Show a measured number over past runs, or compare two baseline files. See [Performance testing](/advanced/performance/) |
@@ -24,10 +24,10 @@ description: Complete reference for all probe CLI commands and flags.
 | `probe ios-driver` | Manage the iOS system-dialog driver: `install`, `status`, `stop` |
 | `probe ai doctor` | Check the configured `ai:` provider: endpoint, model, text, vision. Optional — see [AI & local models](/tools/ai/) |
 | `probe triage` | Explain failures from a JSON results file with the configured model. Advisory; never re-runs or changes results |
-| `probe prefs` | Show or change your own settings on this computer (`probe prefs show`, `probe prefs set clear-data-without-asking on\|off`). Shared with FlutterProbe Studio; never read from a project |
+| `probe prefs` | Show or change your own settings on this computer (`probe prefs show`, `probe prefs set clear-data-without-asking on\|off`, `probe prefs set update-check on\|off`). The first is shared with FlutterProbe Studio; nothing is read from a project |
 | `probe studio` | Launch interactive test studio |
 
-`probe version` prints the installed version; a canary ends in `-next.N` (see [Try a canary build](/getting-started/installation/#try-a-canary-build)).
+`probe version` prints the installed version; a canary ends in `-next.N` (see [Try a canary build](/getting-started/installation/#try-a-canary-build)). On a terminal, a run also says in one line on stderr when a newer stable release exists: see [Update check](#update-check).
 
 ## probe test
 
@@ -198,9 +198,31 @@ Settings that belong to you, kept in your user configuration folder and shared b
 ```bash
 probe prefs show
 probe prefs set clear-data-without-asking on     # off is the default
+probe prefs set update-check off                 # on is the default
 ```
 
 `clear-data-without-asking`: when on, a `clear app data` step runs on a simulator or an emulator without the question (and without `--yes`, which also grants permissions). A line says so. It applies only to a device that is verified to be a simulator or an emulator at the moment the step asks (the device list says so, and an Android device also says so itself through `ro.kernel.qemu` or `ro.boot.qemu`); a physical phone, and any device that cannot be told, still ask, or fail in CI with the hint to pass `--yes`. The line says which package was cleared on which device. The setting file is not used if it is a link or other users can read or write it. A parallel run (`--devices`) answers every `clear app data` question yes on every device, as it did before this setting.
+
+## Update check
+
+Every `probe` run in a terminal checks GitHub, in the background and at most once a day, for a newer stable FlutterProbe release. When one exists, the run prints one line on stderr:
+
+```text
+A new FlutterProbe version is available: 0.29.0 (you have 0.28.1). Update: brew upgrade probe
+```
+
+The last words follow how the binary was installed: `brew upgrade probe` for the stable Homebrew formula, `brew uninstall probe@next && brew install AlphaWaveSystems/tap/probe` for a canary (`probe@next`), and the release page for any other install. A canary (`-next.N`) is compared with the stable release of the same number: that release, and any later one, is newer than it.
+
+Nothing is printed when the check fails or the machine is offline. A run waits for the network only when no answer is stored yet (the first run), and then for up to about 1.5 seconds. The check prints nothing extra, and makes no request, when:
+
+- stderr is not a terminal (output is piped), or `--format json` or `--format junit` is given;
+- the `CI` environment variable is set to anything but `false`;
+- the build is a development build;
+- the command is `probe mcp-server`, or `probe prefs set`, which may be the command that turns the check off.
+
+Turn the check off with `PROBE_NO_UPDATE_CHECK=1` (any value other than `0` or `false`), or with `probe prefs set update-check off`. Either one is enough. The last answer is kept in `update-check.json` in your user configuration folder, private to you. The request goes to `api.github.com`, like any GitHub API request: it carries the FlutterProbe version, the operating system and the processor type in its `User-Agent` header, and GitHub sees your network address.
+
+`probe doctor` adds an update line when the check has an answer. The MCP server offers the same answer through the read-only `update_status` tool; see [MCP server](/tools/mcp/).
 
 ## probe report
 

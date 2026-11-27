@@ -62,6 +62,12 @@ Studio's Send request, Network tab and Explain failures methods are deliberately
 
 The full workflow this enables: `list_devices` → `start_device` (if needed) → `get_widget_tree` → `write_test` → `run_tests` → `get_report` → `generate_report` — a complete AI-driven test authoring loop, including device bring-up and HTML reporting.
 
+### Update check (1 tool)
+
+| Tool | Description |
+|---|---|
+| `update_status` | Report whether a newer stable FlutterProbe release exists than this server's version. Read-only. It asks GitHub at most once a day, follows the opt-out (`PROBE_NO_UPDATE_CHECK=1`, or `probe prefs set update-check off`), and reports the latest version as unknown, with no error, when GitHub cannot be reached. Returns JSON: `current`, `latest` (empty when unknown), `update_available`, `source` (`network`, `cache`, `disabled` or `unknown`), `release_url` and `checked_at` |
+
 ## `run_tests` flags
 
 The `run_tests` tool has named parameters for common options (`paths`, `tag`, `device`, `composite_devices`) and a `flags` string for everything else. Key flags an agent should know:
@@ -155,7 +161,7 @@ As of v0.9.4, every release includes a `.mcpb` Claude Desktop Extension that bun
    - `flutter-probe-win32-amd64.mcpb` — Windows x86_64
 2. In Claude Desktop, open **Settings → Extensions** and click **Install Extension**.
 3. Pick the downloaded `.mcpb` file. When prompted, select your **Flutter project directory** (the folder containing `probe.yaml` and `tests/`).
-4. Done — all 40 tools are immediately available in any new Claude conversation.
+4. Done — all 41 tools are immediately available in any new Claude conversation.
 
 Auto-updates and lifecycle are handled by Claude Desktop. To update, just install a newer `.mcpb` over the older one.
 

@@ -19,6 +19,7 @@ import (
 	"github.com/alphawavesystems/flutter-probe/internal/ios"
 	"github.com/alphawavesystems/flutter-probe/internal/migrate"
 	"github.com/alphawavesystems/flutter-probe/internal/parser"
+	"github.com/alphawavesystems/flutter-probe/internal/updatecheck"
 )
 
 // Version is reported in the MCP `initialize` response. Override at startup
@@ -551,6 +552,11 @@ Takes the same arguments as run_tests (see its description for the flags), inclu
 		},
 	},
 	{
+		Name:        "update_status",
+		Description: "Report whether a newer stable FlutterProbe release exists than this server's version. Read-only: it asks GitHub at most once a day, follows the probe CLI's opt-out (PROBE_NO_UPDATE_CHECK=1, or `probe prefs set update-check off`), and reports the latest version as unknown, without an error, when GitHub cannot be reached. Returns JSON: current, latest (empty when unknown), update_available, source (network, cache, disabled or unknown), release_url and checked_at.",
+		InputSchema: mcpSchema{Type: "object"},
+	},
+	{
 		Name:        "generate_report",
 		Description: "Generate a standalone HTML test report from a JSON results file. Pass --open in flags to open it in the browser immediately.",
 		InputSchema: mcpSchema{
@@ -739,6 +745,8 @@ func (s *Server) callTool(req mcpRequest) *mcpResponse {
 		return s.initProject(req.ID)
 	case "doctor":
 		return s.doctorProject(req.ID, args["config"])
+	case "update_status":
+		return s.updateStatus(req.ID)
 	case "validate_project":
 		return s.validateProject(req.ID, args["config"])
 	case "generate_report":
@@ -1054,6 +1062,25 @@ func (s *Server) takeScreenshot(id any, rawName, deviceID string) *mcpResponse {
 // the report is the result, so it is not an MCP error. Only a run that printed no report is an error.
 func (s *Server) doctorProject(id any, cfgPath string) *mcpResponse {
 	return s.runJSONReport(id, cfgPath, "doctor")
+}
+
+// updateStatus reports whether a newer stable release exists than this server's version. It is read-only and follows the probe CLI's
+// opt-out. When GitHub cannot be reached the latest version is reported as unknown: that is a result, not an MCP error, and nothing
+// is written to stdout beyond the JSON.
+func (s *Server) updateStatus(id any) *mcpResponse {
+	st := updatecheck.Start(Version, os.Getenv, time.Now()).Status(updatecheck.Budget)
+	out := map[string]any{
+		"current":          st.Current,
+		"latest":           st.Latest,
+		"update_available": st.UpdateAvailable,
+		"source":           st.Source,
+		"release_url":      st.URL,
+	}
+	if !st.CheckedAt.IsZero() {
+		out["checked_at"] = st.CheckedAt.UTC().Format(time.RFC3339)
+	}
+	body, err := json.Marshal(out)
+	return textResp(id, string(body), err)
 }
 
 // validateProject runs probe validate and returns its JSON report. A failed check still prints the report, and the report
