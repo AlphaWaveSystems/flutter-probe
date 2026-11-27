@@ -27,7 +27,7 @@ We read it as a hosted service, offered to others, that runs FlutterProbe tests 
 | Your CI runs `probe test` on every change | Yes |
 | You run FlutterProbe on shared test machines for your own apps | Yes |
 | A contractor uses FlutterProbe to test your apps | Yes |
-| A consultancy uses FlutterProbe on its own machines and CI to test its clients' apps as part of its work, and does not offer FlutterProbe to clients as a service | Yes, in our reading |
+| A consultancy uses FlutterProbe on its own machines and CI to test its clients' apps as part of its work, without giving clients access to FlutterProbe | Yes, in our reading |
 | You change FlutterProbe for your own use | Yes |
 | You ship the Dart agent (MIT) in an app for your users | Yes |
 | You run FlutterProbe as a hosted service that other companies pay to use for their tests | Not without a commercial license, when it competes with FlutterProbe |

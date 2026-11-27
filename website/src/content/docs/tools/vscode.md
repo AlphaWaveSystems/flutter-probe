@@ -65,9 +65,10 @@ code --install-extension flutterprobe-*.vsix
 Two things to expect from this build:
 
 - **The device view is a placeholder.** The build copies the shared device-view bundle from `studio/frontend/dist-device-view/` when it exists. A fresh checkout does not have it, so the build prints `device-view.iife.js not found; keeping the placeholder in media/` and the package carries the placeholder. Build the bundle first (`npm run build:device-view` in `studio/frontend`, which needs that folder's dependencies) if the package should have the real device view.
-- **The extension's `LICENSE` file (MIT) is in `vscode/`.**
 
-What was run, and what was not: with Node 26.13.1, npm 11.20.0 and `@vscode/vsce` 4.1.1, `npx vsce package --no-dependencies` wrote the package (49 files, 89.66 KB) here and on a reviewer's clean install. `npm run package` wrote the same package here, with the dependencies of another checkout linked in, and failed on the reviewer's clean install with `Extension entrypoint(s) missing: extension/out/extension.js` although `out/extension.js` existed after the compile. If `npm run package` fails that way for you, use `npx vsce package --no-dependencies`; the extension has no runtime dependencies. The cause of the first failure was not found.
+The extension is MIT-licensed, and its `LICENSE` file is in `vscode/`.
+
+What was run, and what was not: with Node 26.13.1, npm 11.20.0 and `@vscode/vsce` 4.1.1, `npx vsce package --no-dependencies` wrote the package (49 files, 89.66 KB, measured before `vscode/LICENSE` was added) here and on a reviewer's clean install. `npm run package` wrote the same package here, with the dependencies of another checkout linked in, and failed on the reviewer's clean install with `Extension entrypoint(s) missing: extension/out/extension.js` although `out/extension.js` existed after the compile. If `npm run package` fails that way for you, use `npx vsce package --no-dependencies`; the extension has no runtime dependencies. The cause of the first failure was not found.
 
 ### From source
 
