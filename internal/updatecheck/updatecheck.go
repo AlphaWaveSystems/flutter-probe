@@ -60,13 +60,13 @@ type Status struct {
 
 // Check is one run's update check. Start begins it, and Status reads it.
 type Check struct {
-	current     string
-	off         bool
-	unversioned bool
-	pending     bool
-	stored      cache
-	done        chan result
-	got         *result
+	current string
+	off     bool
+	unknown bool
+	pending bool
+	stored  cache
+	done    chan result
+	got     *result
 }
 
 type result struct {
@@ -75,8 +75,8 @@ type result struct {
 }
 
 // Start begins the check for a run. It makes no request when the check is off (PROBE_NO_UPDATE_CHECK, or
-// `probe prefs set update-check off`), when this build has no release version (a development build), or when the stored answer
-// is fresh. Otherwise it asks GitHub in the background and returns at once.
+// `probe prefs set update-check off`), when this build has no release version (a development build), when the folder for the stored
+// answer cannot be written, or when the stored answer is fresh. Otherwise it asks GitHub in the background and returns at once.
 func Start(current string, getenv func(string) string, now time.Time) *Check {
 	stored := readCache()
 	h := &Check{current: current, stored: stored, done: make(chan result, 1)}
@@ -86,31 +86,72 @@ func Start(current string, getenv func(string) string, now time.Time) *Check {
 	}
 	if _, _, ok := parse(current); !ok {
 		// A development build has no release to compare with, so it asks nothing.
-		h.unversioned = true
+		h.unknown = true
 		return h
 	}
-	if stored.CheckedAt != 0 && now.Sub(time.Unix(stored.CheckedAt, 0)) < RefreshAfter {
+	if age := now.Sub(time.Unix(stored.CheckedAt, 0)); stored.CheckedAt != 0 && age >= 0 && age < RefreshAfter {
 		h.done <- result{cache: stored}
+		return h
+	}
+	if !cacheWritable() {
+		// Without a folder to keep the answer in, a check could not help the next run, so it is not made.
+		h.unknown = true
 		return h
 	}
 	h.pending = true
 	go func() {
 		next, fresh := ask(current, now, stored)
-		if !fresh {
-			// A failed attempt counts as today's check too, so an offline machine does not ask again on every run.
-			next = stored
-			next.CheckedAt = now.Unix()
-		}
-		_ = writeCache(next)
+		updateCache(func(cur cache) cache {
+			if !fresh {
+				// A failed attempt counts as today's check too, so an offline machine does not ask again on every run.
+				if cur.CheckedAt < now.Unix() {
+					cur.CheckedAt = now.Unix()
+				}
+				return cur
+			}
+			// Only a changed answer replaces the stored release. The opt-out and any newer answer from another run stay as they are.
+			if next.ETag != stored.ETag || next.Latest != stored.Latest {
+				cur.Latest, cur.URL, cur.ETag = next.Latest, next.URL, next.ETag
+			}
+			cur.CheckedAt = now.Unix()
+			return cur
+		})
 		h.done <- result{cache: next, fresh: fresh}
 	}()
 	return h
 }
 
-// Pending reports whether this run is waiting on a request and has no stored answer to show. A caller may give the answer one
-// budget in that case, so a first run still gets its notice; a run with a stored answer never waits.
+// Pending reports whether a request is in flight for this run. A caller may give it one budget before it exits, so a run that
+// refreshes the stored answer stores it. A run with a fresh stored answer is not pending.
 func (h *Check) Pending() bool {
-	return h.pending && h.stored.Latest == ""
+	return h.pending
+}
+
+// updateCache changes the stored answer as it is on disk now, not as this run read it at its start. A background refresh therefore
+// never overwrites a choice made meanwhile, such as `probe prefs set update-check off`, or a newer answer from another run.
+func updateCache(change func(cache) cache) {
+	_ = writeCache(change(readCache()))
+}
+
+// cacheWritable reports whether the folder for the stored answer can take a file. It creates the folder if it is missing, then
+// creates and removes a probe file. A check made where the answer could not be kept would ask GitHub on every run.
+func cacheWritable() bool {
+	path, err := cachePath()
+	if err != nil {
+		return false
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return false
+	}
+	f, err := os.CreateTemp(dir, ".update-check-probe-*")
+	if err != nil {
+		return false
+	}
+	name := f.Name()
+	_ = f.Close()
+	_ = os.Remove(name)
+	return true
 }
 
 // Status reports this run's update status. It uses GitHub's answer if it arrives within wait, and otherwise the answer an
@@ -120,7 +161,7 @@ func (h *Check) Status(wait time.Duration) Status {
 	if h.off {
 		return st
 	}
-	if h.unversioned {
+	if h.unknown {
 		st.Source = "unknown"
 		return st
 	}

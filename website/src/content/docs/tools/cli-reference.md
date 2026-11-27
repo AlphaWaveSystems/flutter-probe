@@ -213,16 +213,17 @@ A new FlutterProbe version is available: 0.29.0 (you have 0.28.1). Update: brew 
 
 The last words follow how the binary was installed: `brew upgrade probe` for the stable Homebrew formula, `brew uninstall probe@next && brew install AlphaWaveSystems/tap/probe` for a canary (`probe@next`), and the release page for any other install. A canary (`-next.N`) is compared with the stable release of the same number: that release, and any later one, is newer than it.
 
-Nothing is printed when the check fails or the machine is offline. A run waits for the network only when no answer is stored yet (the first run), and then for up to about 1.5 seconds. The check prints nothing extra, and makes no request, when:
+Nothing is printed when the check fails or the machine is offline. Only a run that refreshes the stored answer waits for GitHub's reply, for up to about 1.5 seconds after the command's output, so that the answer is kept for the next run. A refresh is due on the first run, and then when more than a day has passed since the last check; a run with a fresh answer does not wait. The check prints nothing extra, and makes no request, when:
 
-- stderr is not a terminal (output is piped), or `--format json` or `--format junit` is given;
+- stderr is not a terminal (output is piped, written to a file, or sent to `/dev/null`), or `--format json` or `--format junit` is given;
 - the `CI` environment variable is set to anything but `false`;
 - the build is a development build;
-- the command is `probe mcp-server`, or `probe prefs set`, which may be the command that turns the check off.
+- the command is `probe mcp-server`, or `probe prefs set`, which may be the command that turns the check off, with or without global flags before it;
+- the folder for the stored answer cannot be written, so the answer could not be kept.
 
 Turn the check off with `PROBE_NO_UPDATE_CHECK=1` (any value other than `0` or `false`), or with `probe prefs set update-check off`. Either one is enough. The last answer is kept in `update-check.json` in your user configuration folder, private to you. The request goes to `api.github.com`, like any GitHub API request: it carries the FlutterProbe version, the operating system and the processor type in its `User-Agent` header, and GitHub sees your network address.
 
-`probe doctor` adds an update line when the check has an answer. The MCP server offers the same answer through the read-only `update_status` tool; see [MCP server](/tools/mcp/).
+`probe doctor` adds an update line when this run made the check (the runs listed above make none) and the check has an answer. The MCP server offers the same answer through the read-only `update_status` tool; see [MCP server](/tools/mcp/).
 
 ## probe report
 

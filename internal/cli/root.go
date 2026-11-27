@@ -56,9 +56,9 @@ func ExitCode(err error) int {
 // Execute is the entry point called by main(). The update check starts before the command runs and its notice is printed after it,
 // on stderr only; a failed check prints nothing (see updatecheck).
 func Execute() error {
-	check := startUpdateCheck(os.Args[1:])
+	runUpdateCheck = startUpdateCheck(os.Args[1:])
 	err := rootCmd.Execute()
-	printUpdateNotice(os.Stderr, check)
+	printUpdateNotice(os.Stderr, runUpdateCheck)
 	return err
 }
 

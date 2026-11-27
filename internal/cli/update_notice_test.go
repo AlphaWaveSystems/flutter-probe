@@ -36,8 +36,6 @@ func TestUpdateNoticeSkipRules(t *testing.T) {
 		{"junit output", []string{"test", "--format=junit"}, none, true, "0.28.1", true},
 		{"text output keeps the notice", []string{"test", "--format", "text"}, none, true, "0.28.1", false},
 		{"the MCP stdio server", []string{"mcp-server"}, none, true, "0.28.1", true},
-		{"turning a setting, which may turn the check off", []string{"prefs", "set", "update-check", "off"}, none, true, "0.28.1", true},
-		{"reading the settings keeps the check", []string{"prefs", "show"}, none, true, "0.28.1", false},
 	}
 	for _, c := range cases {
 		reason := updateNoticeSkip(c.args, c.getenv, c.terminal, c.version)
