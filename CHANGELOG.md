@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **An iOS simulator that cannot reconnect no longer points at `idevicesyslog`.** The error named the physical-device log tool (`ios physical: idevicesyslog`) for a simulator. When no token appears, it says the app may have crashed or the simulator is not running, and names the simulator log to check (`xcrun simctl spawn <udid> log`). The physical-device path is unchanged.
+
 - **`probe mcp-server` reports the installed version.** Its MCP `initialize` answer said `dev`, because the embedded server never received the version the binary was built with. `probe-mcp` was not affected.
 
 ### Changed
