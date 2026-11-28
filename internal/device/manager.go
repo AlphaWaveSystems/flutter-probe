@@ -474,6 +474,13 @@ func (m *Manager) ReadTokenIOS(ctx context.Context, udid string, timeout time.Du
 	if errors.Is(err, ios.ErrAmbiguousToken) {
 		return "", err // a simulator with two tokens is not a physical device: do not look for one in the device log
 	}
+	if ios.ValidSimulatorUDID(udid) {
+		// A simulator has no device log to fall back to (idevicesyslog reads physical devices only). When no token appears, say what to check.
+		if errors.Is(err, ios.ErrTokenNotFound) {
+			return "", fmt.Errorf("%w; the app may have crashed, or the simulator is not running: check the simulator log with `xcrun simctl spawn %s log`", err, udid)
+		}
+		return "", err
+	}
 
 	// Fallback: physical device via idevicesyslog
 	return m.readTokenPhysicalIOS(ctx, udid, timeout)

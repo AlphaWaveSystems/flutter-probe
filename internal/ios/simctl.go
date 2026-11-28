@@ -56,6 +56,10 @@ type SimCtl struct {
 // token: which one to use cannot be told, and the first one is not a safe guess (it is as likely another app's).
 var ErrAmbiguousToken = errors.New("ios: more than one app on this simulator has a Probe token")
 
+// ErrTokenNotFound is returned by ReadToken when no token file appears before the timeout. A simulator that is not running, or a missing
+// simctl, looks the same from here: the file never appears.
+var ErrTokenNotFound = errors.New("ios: probe token not found")
+
 func New() *SimCtl { return &SimCtl{} }
 
 // List returns all available iOS simulators.
@@ -303,7 +307,7 @@ func (s *SimCtl) ReadToken(ctx context.Context, udid string, timeout time.Durati
 		fileAttempt++
 		select {
 		case <-tCtx.Done():
-			return "", fmt.Errorf("ios: probe token not found within %s", timeout)
+			return "", fmt.Errorf("%w within %s", ErrTokenNotFound, timeout)
 		case <-time.After(1 * time.Second):
 		}
 	}
